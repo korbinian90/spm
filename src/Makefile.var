@@ -22,7 +22,7 @@ MEXOPTS      = -O -largeArrayDims
 MEXEND       =
 MOSUF        = o # mex output object suffix
 UNAME        = uname
-IS_ARM       = uname -m | grep -q 'arm' && echo true
+ARCH         = uname -m
 AR           = ar rcs
 COPY         = cp -f
 DEL          = rm -f
@@ -49,21 +49,16 @@ endif
 
 ##### macOS #####
 ifeq (Darwin,$(PLATFORM))
-  ifeq ($(IS_ARM),false)
-    MEXEXT     = mexmaci64
-    MEXBIN    ?= mex
-    # https://stackoverflow.com/questions/37362414/
-    OMPFLAG    = -fopenmp=libiomp5
-    SOSUF      = dylib
-    SONAME     = install_name
-  else
+  ifeq ($(ARCH),aarch64) # Check for Apple Silicon
     MEXEXT     = mexmaca64
-    MEXBIN    ?= mex
-    # https://stackoverflow.com/questions/37362414/
-    OMPFLAG    = -fopenmp=libiomp5
-    SOSUF      = dylib
-    SONAME     = install_name
+  else
+    MEXEXT     = mexmaci64
   endif
+  MEXBIN    ?= mex
+  # https://stackoverflow.com/questions/37362414/
+  OMPFLAG    = -fopenmp=libiomp5
+  SOSUF      = dylib
+  SONAME     = install_name  
 endif
 
 ##### Windows #####
