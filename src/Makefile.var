@@ -50,8 +50,10 @@ endif
 ##### macOS #####
 ifeq (Darwin,$(PLATFORM))
   ifeq ($(ARCH),aarch64) # Check for Apple Silicon
+    @echo "Running on ARM64 architecture ($(ARCH))"
     MEXEXT     = mexmaca64
   else
+    @echo "Running on Intel architecture ($(ARCH))"
     MEXEXT     = mexmaci64
   endif
   MEXBIN    ?= mex
