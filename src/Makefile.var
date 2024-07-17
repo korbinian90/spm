@@ -22,7 +22,7 @@ MEXOPTS      = -O -largeArrayDims
 MEXEND       =
 MOSUF        = o # mex output object suffix
 UNAME        = uname
-ARCH         = uname -m
+GET_ARCH     = uname -m
 AR           = ar rcs
 COPY         = cp -f
 DEL          = rm -f
@@ -40,6 +40,10 @@ ifndef PLATFORM
   PLATFORM   = $(shell $(UNAME))
 endif
 
+ifndef ARCH
+  ARCH   = $(shell $(GET_ARCH))
+endif
+
 ##### Linux #####
 ifeq (Linux,$(PLATFORM))
   MEXEXT     = mexa64
@@ -50,10 +54,8 @@ endif
 ##### macOS #####
 ifeq (Darwin,$(PLATFORM))
   ifeq (aarch64,$(ARCH)) # Check for Apple Silicon
-    @ echo "Running on Apple Silicon"
     MEXEXT     = mexmaca64
   else
-    @ echo "Running on Intel architecture"
     MEXEXT     = mexmaci64
   endif
   MEXBIN    ?= mex
