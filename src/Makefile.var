@@ -41,7 +41,7 @@ ifndef PLATFORM
 endif
 
 ifndef ARCH
-  ARCH   = $(shell $(GET_ARCH))
+  ARCH       = $(shell $(GET_ARCH))
 endif
 
 ##### Linux #####
@@ -54,9 +54,9 @@ endif
 ##### macOS #####
 ifeq (Darwin,$(PLATFORM))
   ifeq (aarch64,$(ARCH)) # Check for Apple Silicon
-    MEXEXT     = mexmaca64
+    MEXEXT   = mexmaca64
   else
-    MEXEXT     = mexmaci64
+    MEXEXT   = mexmaci64
   endif
   MEXBIN    ?= mex
   # https://stackoverflow.com/questions/37362414/
