@@ -53,7 +53,7 @@ endif
 
 ##### macOS #####
 ifeq (Darwin,$(PLATFORM))
-  ifeq (aarch64,$(ARCH)) # Check for Apple Silicon
+  ifeq (arm64,$(ARCH)) # Check for Apple Silicon
     MEXEXT   = mexmaca64
   else
     MEXEXT   = mexmaci64
