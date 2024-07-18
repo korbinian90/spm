@@ -38,12 +38,8 @@ SONAME       = soname
 
 ifndef PLATFORM
   PLATFORM   = $(shell $(UNAME))
-endif
-
-ifndef ARCH
-  ARCH       = $(shell $(GET_ARCH))
   ifeq (Darwin,$(PLATFORM))
-    ifeq (arm64,$(ARCH)) # Check for Apple Silicon
+    ifeq (arm64,$(shell $(GET_ARCH))) # Check for Apple Silicon
       PLATFORM = arm64
     endif
   endif
