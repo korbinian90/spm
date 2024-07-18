@@ -42,6 +42,11 @@ endif
 
 ifndef ARCH
   ARCH       = $(shell $(GET_ARCH))
+  ifeq (Darwin,$(PLATFORM))
+    ifeq (arm64,$(ARCH)) # Check for Apple Silicon
+      PLATFORM = arm64
+    endif
+  endif
 endif
 
 ##### Linux #####
@@ -53,16 +58,20 @@ endif
 
 ##### macOS #####
 ifeq (Darwin,$(PLATFORM))
-  ifeq (arm64,$(ARCH)) # Check for Apple Silicon
-    MEXEXT   = mexmaca64
-  else
-    MEXEXT   = mexmaci64
-  endif
+  MEXEXT     = mexmaci64
   MEXBIN    ?= mex
   # https://stackoverflow.com/questions/37362414/
   OMPFLAG    = -fopenmp=libiomp5
   SOSUF      = dylib
-  SONAME     = install_name  
+  SONAME     = install_name
+endif
+ifeq (arm64,$(PLATFORM))
+  MEXEXT     = mexmaca64
+  MEXBIN    ?= mex
+  # https://stackoverflow.com/questions/37362414/
+  OMPFLAG    = -fopenmp=libiomp5
+  SOSUF      = dylib
+  SONAME     = install_name
 endif
 
 ##### Windows #####
