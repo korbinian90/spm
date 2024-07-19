@@ -54,12 +54,12 @@ jobs:
           lfs: true
       - name: Run regression tests with existing MEX files
         if: github.event.schedule == '40 16 * * 3'
-        uses: matlab-actions/run-command@v1 # R2020b fails with run-command@v2
+        uses: matlab-actions/run-command@v2 # R2020b fails with run-command@v2
         with:
           command: addpath(pwd); results = spm_tests('class','regression','display',true); assert(all(~[results.Failed]));
       - name: Run unit tests with existing MEX files
         if: github.event.schedule != '40 16 * * 3'
-        uses: matlab-actions/run-command@v1
+        uses: matlab-actions/run-command@v2
         with:
           command: addpath(pwd); results = spm_tests('class','unit','display',true); assert(all(~[results.Failed]));
       - name: Compile MEX files
