@@ -3,6 +3,7 @@ on:
   release:
     types: [published]
   pull_request:
+  push:
   workflow_dispatch:
   schedule:
     - cron: "15 3 * * *"
