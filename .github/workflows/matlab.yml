@@ -26,7 +26,7 @@ jobs:
     steps:
       - name: Set USE_OLD_MATLAB_ACTION environment variable
         run: |
-          if [[ "${{ matrix.version }}" == "R2020a" || "${{ matrix.version }}" == "R2020b" || "${{ matrix.version }}" == "R2022a" || "${{ matrix.version }}" == "R2022b" ]]; then
+          if [[ "${{ matrix.version }}" == "R2020a" ]] || [[ "${{ matrix.version }}" == "R2020b" ]] || [[ "${{ matrix.version }}" == "R2022a" ]] || [[ "${{ matrix.version }}" == "R2022b" ]]; then
             echo "USE_OLD_MATLAB_ACTION=true" >> $GITHUB_ENV
           else
             echo "USE_OLD_MATLAB_ACTION=false" >> $GITHUB_ENV
