@@ -3,10 +3,10 @@ on:
   workflow_dispatch:
   push:
     paths:
-      - '*.c'
-      - '*.h'
-      - '*.cpp'
-      - '*.hpp'
+      - '**/*.c'
+      - '**/*.h'
+      - '**/*.cpp'
+      - '**/*.hpp'
 
 jobs:
   compile_mex:
