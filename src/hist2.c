@@ -44,10 +44,6 @@ static float samp(const mwSize d[3], unsigned char f[], float x, float y, float 
 void hist2(double M[16], unsigned char g[], unsigned char f[], const mwSize dg[3], const mwSize df[3], 
 double H[65536], float s0[3])
 {
-    /* This is for dithering the sampling of the images.  The procedure seems to be similar to that
-       used by Th\'evenaz, Bierlaire and Unser. "Halton Sampling for Image Registration Based on Mutual
-       Information". Sampling Theory in Signal and Image Processing 7(2):141--171 (2008).
-    */
     static float ran[] = {0.656619,0.891183,0.488144,0.992646,0.373326,0.531378,0.181316,0.501944,0.422195,
                           0.660427,0.673653,0.95733,0.191866,0.111216,0.565054,0.969166,0.0237439,0.870216,
                           0.0268766,0.519529,0.192291,0.715689,0.250673,0.933865,0.137189,0.521622,0.895202,
