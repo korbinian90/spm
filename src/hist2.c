@@ -97,24 +97,6 @@ double H[65536], float s0[3])
                     H[ivf+ivg*256] += (1-(vf-ivf));
                     if (ivf<255)
                         H[ivf+1+ivg*256] += (vf-ivf);
-
-                    /*
-                    float vf, vg;
-                    int ivf, ivg;
-                    vg  = samp(dg, g, rx,ry,rz);
-                    vf  = samp(df, f, xp,yp,zp);
-                    ivg = floor(vg);
-                    ivf = floor(vf);
-                    H[ivf+ivg*256] += (1-(vf-ivf))*(1-(vg-ivg));
-                    if (ivf<255)
-                        H[ivf+1+ivg*256] += (vf-ivf)*(1-(vg-ivg));
-                    if (ivg<255)
-                    {
-                        H[ivf+(ivg+1)*256] += (1-(vf-ivf))*(vg-ivg);
-                        if (ivf<255)
-                            H[ivf+1+(ivg+1)*256] += (vf-ivf)*(vg-ivg);
-                    }
-                    */
                 }
             }
         }
