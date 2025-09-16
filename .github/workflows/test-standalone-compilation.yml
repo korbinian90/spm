@@ -6,7 +6,7 @@ on:
       matlab_version:
         description: 'MATLAB version to use'
         required: false
-        default: 'R2024b'
+        default: 'latest'
       test_type:
         description: 'Type of test to run'
         required: false
@@ -16,6 +16,9 @@ on:
         - basic
         - specific
         - all
+
+env:
+  MLM_LICENSE_TOKEN: ${{ secrets.MATLAB_BATCH_TOKEN }}
 
 jobs:
   compile-and-test:
@@ -28,7 +31,8 @@ jobs:
     - name: Setup MATLAB
       uses: matlab-actions/setup-matlab@v2
       with:
-        release: ${{ github.event.inputs.matlab_version || 'R2024b' }}
+        release: ${{ github.event.inputs.matlab_version || 'latest' }}
+        products: MATLAB_Compiler
         
     - name: Check MATLAB Compiler availability
       uses: matlab-actions/run-command@v2
