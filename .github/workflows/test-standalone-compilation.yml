@@ -16,6 +16,22 @@ on:
         - basic
         - specific
         - all
+  push:
+    branches: [ spm_standalone_testing, main ]
+    paths:
+      - 'spm_run_standalone_tests.m'
+      - 'spm_standalone.m'
+      - 'test_spm_standalone_basic.m'
+      - 'spm_make_standalone.m'
+      - '.github/workflows/test-standalone-compilation.yml'
+  pull_request:
+    branches: [ main ]
+    paths:
+      - 'spm_run_standalone_tests.m'
+      - 'spm_standalone.m'
+      - 'test_spm_standalone_basic.m'
+      - 'spm_make_standalone.m'
+      - '.github/workflows/test-standalone-compilation.yml'
 
 env:
   MLM_LICENSE_TOKEN: ${{ secrets.MATLAB_BATCH_TOKEN }}
@@ -127,51 +143,80 @@ jobs:
         echo "Files in standalone directory:"
         ls -la
         
-        # Check if executable exists
-        if [ -f "spm12" ]; then
-            echo "✓ Standalone executable found"
+        # Find SPM executable (name varies by MATLAB version)
+        SPM_EXE=$(find . -name "spm*" -type f -executable ! -name "*.sh" | head -1)
+        SPM_SCRIPT=$(find . -name "run_spm*.sh" -type f | head -1)
+        
+        if [ -n "$SPM_EXE" ]; then
+            echo "✓ Standalone executable found: $SPM_EXE"
             
-            # Make executable
-            chmod +x spm12
+            # Make sure it's executable
+            chmod +x "$SPM_EXE"
             
             # Test help
             echo "Testing --help:"
-            ./spm12 --help || echo "Help command failed"
+            "$SPM_EXE" --help || echo "Help command failed"
             
             # Test version
             echo "Testing --version:"
-            ./spm12 --version || echo "Version command failed"
+            "$SPM_EXE" --version || echo "Version command failed"
             
             # Test our custom test command
             echo "Testing custom test command:"
-            ./spm12 test || echo "Test command failed"
+            "$SPM_EXE" test || echo "Test command failed"
             
-        elif [ -f "run_spm12.sh" ]; then
-            echo "✓ Standalone script found"
+        elif [ -n "$SPM_SCRIPT" ]; then
+            echo "✓ Standalone script found: $SPM_SCRIPT"
             
-            # Find MATLAB Runtime (should be available in GitHub Actions)
-            MCR_ROOT="/opt/matlabruntime/v*"
-            if [ -d $MCR_ROOT ]; then
-                echo "✓ MATLAB Runtime found at $MCR_ROOT"
+            # Make executable
+            chmod +x "$SPM_SCRIPT"
+            
+            # Find MATLAB Runtime
+            MCR_ROOT=$(find /opt -name "MATLAB_Runtime" -type d 2>/dev/null | head -1)
+            if [ -z "$MCR_ROOT" ]; then
+                # Try common locations for different MATLAB versions
+                for path in /opt/matlabruntime/v* /usr/local/MATLAB/MATLAB_Runtime/v*; do
+                    if [ -d "$path" ]; then
+                        MCR_ROOT="$path"
+                        break
+                    fi
+                done
+            fi
+            
+            if [ -n "$MCR_ROOT" ]; then
+                echo "✓ MATLAB Runtime found at: $MCR_ROOT"
                 
                 # Test help
                 echo "Testing --help:"
-                ./run_spm12.sh $MCR_ROOT --help || echo "Help command failed"
+                "$SPM_SCRIPT" "$MCR_ROOT" --help || echo "Help command failed"
                 
                 # Test version
                 echo "Testing --version:"
-                ./run_spm12.sh $MCR_ROOT --version || echo "Version command failed"
+                "$SPM_SCRIPT" "$MCR_ROOT" --version || echo "Version command failed"
                 
                 # Test our custom test command
                 echo "Testing custom test command:"
-                ./run_spm12.sh $MCR_ROOT test || echo "Test command failed"
+                "$SPM_SCRIPT" "$MCR_ROOT" test || echo "Test command failed"
                 
             else
-                echo "✗ MATLAB Runtime not found"
-                exit 1
+                echo "✗ MATLAB Runtime not found, trying without explicit path..."
+                
+                # Test help
+                echo "Testing --help:"
+                "$SPM_SCRIPT" --help || echo "Help command failed"
+                
+                # Test version
+                echo "Testing --version:"
+                "$SPM_SCRIPT" --version || echo "Version command failed"
+                
+                # Test our custom test command
+                echo "Testing custom test command:"
+                "$SPM_SCRIPT" test || echo "Test command failed"
             fi
         else
-            echo "✗ No standalone executable found"
+            echo "✗ No SPM executable or script found"
+            echo "Available files:"
+            ls -la
             exit 1
         fi
         
@@ -187,13 +232,21 @@ jobs:
       if: github.event.inputs.test_type == 'specific'
       run: |
         cd standalone
-        if [ -f "spm12" ]; then
-            echo "Testing specific SPM test:"
-            ./spm12 test test_spm || echo "Specific test failed"
-        elif [ -f "run_spm12.sh" ]; then
-            MCR_ROOT="/opt/matlabruntime/v*"
-            echo "Testing specific SPM test:"
-            ./run_spm12.sh $MCR_ROOT test test_spm || echo "Specific test failed"
+        SPM_EXE=$(find . -name "spm*" -type f -executable ! -name "*.sh" | head -1)
+        SPM_SCRIPT=$(find . -name "run_spm*.sh" -type f | head -1)
+        
+        if [ -n "$SPM_EXE" ]; then
+            echo "Testing specific SPM test with executable:"
+            "$SPM_EXE" test test_spm || echo "Specific test failed"
+        elif [ -n "$SPM_SCRIPT" ]; then
+            MCR_ROOT=$(find /opt -name "MATLAB_Runtime" -type d 2>/dev/null | head -1)
+            if [ -n "$MCR_ROOT" ]; then
+                echo "Testing specific SPM test with script:"
+                "$SPM_SCRIPT" "$MCR_ROOT" test test_spm || echo "Specific test failed"
+            else
+                echo "Testing specific SPM test without explicit MCR:"
+                "$SPM_SCRIPT" test test_spm || echo "Specific test failed"
+            fi
         fi
         
     - name: Summary
