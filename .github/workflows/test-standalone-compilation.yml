@@ -33,6 +33,7 @@ jobs:
       with:
         release: ${{ github.event.inputs.matlab_version || 'latest' }}
         products: MATLAB_Compiler
+        cache: true
         
     - name: Check MATLAB Compiler availability
       uses: matlab-actions/run-command@v2

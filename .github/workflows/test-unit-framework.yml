@@ -29,6 +29,7 @@ jobs:
       with:
         release: latest
         products: MATLAB_Compiler
+        cache: true
         
     - name: Compile test application
       uses: matlab-actions/run-command@v2

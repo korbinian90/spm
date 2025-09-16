@@ -2,9 +2,14 @@ function results = spm_run_standalone_tests(test_name)
 % Run SPM tests in standalone application  
 % FORMAT results = spm_run_standalone_tests([test_name])
 %
-% This function uses the MATLAB Unit Testing Framework available in
-% standalone applications, but works around the limitation that only
-% class-based tests are supported (SPM uses function-based tests).
+% This function uses the MATLAB Unit Testing Framework when available in
+% standalone applications. Note: MATLAB Compiler only supports class-based 
+% tests, not function-based tests (which SPM currently uses).
+%
+% IMPORTANT DISCOVERY:
+% - runtests() is available in standalone apps with full licensing
+% - runtests() may not be available with batch licensing
+% - Only class-based tests work in standalone (not SPM's function-based tests)
 %__________________________________________________________________________
 
 % Guillaume Flandin
@@ -18,7 +23,25 @@ end
 spm('defaults', 'fmri');
 spm_get_defaults('cmdline', true);
 
-fprintf('=== SPM Standalone Test Runner ===\n\n');
+fprintf('=== SPM Standalone Test Runner ===\n');
+fprintf('Checking test environment capabilities...\n\n');
+
+% Check environment
+is_standalone = isdeployed;
+fprintf('Environment: %s\n', iff(is_standalone, 'Standalone', 'Regular MATLAB'));
+
+% Check runtests availability
+runtests_available = exist('runtests', 'builtin') || exist('runtests', 'file');
+fprintf('runtests available: %s\n', iff(runtests_available, 'Yes', 'No'));
+
+if ~runtests_available
+    fprintf('\nWARNING: runtests not available!\n');
+    fprintf('This may be due to:\n');
+    fprintf('  1. Batch licensing limitations\n');
+    fprintf('  2. Missing Unit Testing Framework\n');
+    fprintf('  3. Incomplete MATLAB installation\n');
+    fprintf('Falling back to basic verification...\n\n');
+end
 
 try
     % Try using the Unit Testing Framework

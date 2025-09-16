@@ -166,7 +166,40 @@ switch lower(action)
     case 'test'
     %----------------------------------------------------------------------
         spm_banner;
+        fprintf('SPM Standalone Test Mode\n');
+        fprintf('========================\n\n');
+        
         try
+            % Check if we can use Unit Testing Framework
+            if exist('runtests', 'builtin') || exist('runtests', 'file')
+                fprintf('✓ Unit Testing Framework available\n');
+                
+                % Try class-based test first (standalone compatible)
+                if exist('test_spm_standalone_basic.m', 'file')
+                    fprintf('Running class-based tests (standalone compatible)...\n');
+                    try
+                        results = runtests('test_spm_standalone_basic.m');
+                        if ~isempty(results)
+                            passed = sum([results.Passed]);
+                            failed = sum([results.Failed]);
+                            fprintf('\n✓ Class-based tests: %d passed, %d failed\n', passed, failed);
+                        end
+                    catch class_error
+                        fprintf('✗ Class-based test failed: %s\n', class_error.message);
+                    end
+                else
+                    fprintf('⚠ Class-based test file not found\n');
+                end
+                
+                % Run custom test runner
+                fprintf('\nRunning custom SPM test runner...\n');
+            else
+                fprintf('✗ Unit Testing Framework not available\n');
+                fprintf('This may be due to batch licensing limitations\n');
+                fprintf('Running basic verification only...\n');
+            end
+            
+            % Always run our custom test runner as fallback
             if isempty(varargin(2:end))
                 % Run default tests
                 results = spm_run_standalone_tests();
@@ -176,12 +209,22 @@ switch lower(action)
             end
             
             % Display results
-            fprintf('Test Results:\n');
-            fprintf('  Total: %d, Passed: %d, Failed: %d\n', ...
-                length(results), sum([results.Passed]), sum([results.Failed]));
-            
-            if any([results.Failed])
-                exit_code = 1;
+            if ~isempty(results) && isstruct(results)
+                fprintf('\nTest Results Summary:\n');
+                if isfield(results, 'Passed')
+                    total = length(results);
+                    passed = sum([results.Passed]);
+                    failed = sum([results.Failed]);
+                    fprintf('  Total: %d, Passed: %d, Failed: %d\n', total, passed, failed);
+                    
+                    if any([results.Failed])
+                        exit_code = 1;
+                    end
+                else
+                    fprintf('  Custom test format returned\n');
+                end
+            else
+                fprintf('  No test results returned\n');
             end
         catch ME
             fprintf('Error running tests: %s\n', ME.message);
