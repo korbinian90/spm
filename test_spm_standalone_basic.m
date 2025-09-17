@@ -77,7 +77,7 @@ classdef test_spm_standalone_basic < matlab.unittest.TestCase
                 % Read file
                 fid = fopen(temp_file, 'r');
                 testCase.verifyGreaterThan(fid, 0, 'Could not open temporary file');
-                read_content = fscanf(fid, '%s');
+                read_content = fgetl(fid);  % Use fgetl to preserve spaces
                 fclose(fid);
                 
                 testCase.verifyEqual(read_content, test_content, 'File content mismatch');

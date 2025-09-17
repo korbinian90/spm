@@ -28,11 +28,19 @@ fprintf('Checking test environment capabilities...\n\n');
 
 % Check environment
 is_standalone = isdeployed;
-fprintf('Environment: %s\n', iff(is_standalone, 'Standalone', 'Regular MATLAB'));
+if is_standalone
+    fprintf('Environment: Standalone\n');
+else
+    fprintf('Environment: Regular MATLAB\n');
+end
 
 % Check runtests availability
 runtests_available = exist('runtests', 'builtin') || exist('runtests', 'file');
-fprintf('runtests available: %s\n', iff(runtests_available, 'Yes', 'No'));
+if runtests_available
+    fprintf('runtests available: Yes\n');
+else
+    fprintf('runtests available: No\n');
+end
 
 if ~runtests_available
     fprintf('\nWARNING: runtests not available!\n');
