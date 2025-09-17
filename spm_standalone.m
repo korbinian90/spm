@@ -62,6 +62,7 @@ switch lower(action)
             '    function       Execute a function\n',...
             '    eval           Evaluate a MATLAB expression\n',...
             '    test           Run standalone tests\n',...
+            '    test_class     Run class-based tests\n',...
             '    [NODE]         Run a specified batch node\n',...
             '\n',...
             'Options:\n',...
@@ -228,6 +229,75 @@ switch lower(action)
             end
         catch ME
             fprintf('Error running tests: %s\n', ME.message);
+            exit_code = 1;
+        end
+        
+    case 'test_class'
+    %----------------------------------------------------------------------
+        spm_banner;
+        fprintf('SPM Class-Based Test Mode\n');
+        fprintf('=========================\n\n');
+        
+        try
+            % Check for class-based test runner
+            if exist('spm_tests_class.m', 'file')
+                fprintf('✓ Class-based test runner found\n');
+                
+                % Initialize SPM
+                try
+                    spm('defaults', 'fmri');
+                    spm_get_defaults('cmdline', true);
+                    fprintf('✓ SPM initialized for class-based testing\n');
+                catch init_error
+                    fprintf('⚠ SPM initialization warning: %s\n', init_error.message);
+                end
+                
+                % Run class-based tests
+                if nargin > 1 && ~isempty(varargin{2})
+                    % Run specific test
+                    fprintf('Running specific class-based test: %s\n', varargin{2});
+                    results = spm_tests_class('test', varargin{2}, 'display', true, 'verbose', 2);
+                else
+                    % Run all class-based tests
+                    fprintf('Running all class-based tests...\n');
+                    results = spm_tests_class('display', true, 'verbose', 1);
+                end
+                
+                % Display results
+                if ~isempty(results)
+                    passed = sum([results.Passed]);
+                    failed = sum([results.Failed]);
+                    incomplete = sum([results.Incomplete]);
+                    total = numel(results);
+                    
+                    fprintf('\n=== Class-Based Test Results ===\n');
+                    fprintf('Total tests: %d\n', total);
+                    fprintf('Passed: %d\n', passed);
+                    fprintf('Failed: %d\n', failed);
+                    fprintf('Incomplete: %d\n', incomplete);
+                    
+                    if failed > 0 || incomplete > 0
+                        fprintf('✗ Some class-based tests failed or incomplete\n');
+                        exit_code = 1;
+                    else
+                        fprintf('✓ All class-based tests passed\n');
+                    end
+                else
+                    fprintf('ℹ No class-based test results returned\n');
+                end
+                
+            else
+                fprintf('✗ Class-based test runner (spm_tests_class.m) not found\n');
+                fprintf('Please ensure spm_tests_class.m is available\n');
+                exit_code = 1;
+            end
+            
+        catch ME
+            fprintf('Error running class-based tests: %s\n', ME.message);
+            fprintf('Stack trace:\n');
+            for i = 1:length(ME.stack)
+                fprintf('  %s (line %d)\n', ME.stack(i).name, ME.stack(i).line);
+            end
             exit_code = 1;
         end
         

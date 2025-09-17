@@ -22,6 +22,8 @@ on:
       - 'spm_run_standalone_tests.m'
       - 'spm_standalone.m'
       - 'test_spm_standalone_basic.m'
+      - 'test_spm_class.m'
+      - 'spm_tests_class.m'
       - 'spm_make_standalone.m'
       - '.github/workflows/test-standalone-compilation.yml'
   pull_request:
@@ -30,6 +32,8 @@ on:
       - 'spm_run_standalone_tests.m'
       - 'spm_standalone.m'
       - 'test_spm_standalone_basic.m'
+      - 'test_spm_class.m'
+      - 'spm_tests_class.m'
       - 'spm_make_standalone.m'
       - '.github/workflows/test-standalone-compilation.yml'
 
@@ -78,12 +82,81 @@ jobs:
               error('Test runner not found');
           end
           
+          % Verify class-based test runner exists
+          if exist('spm_tests_class.m', 'file')
+              fprintf('✓ Class-based test runner found\n');
+          else
+              warning('Class-based test runner not found');
+          end
+          
+          % Verify class-based test files exist
+          if exist('test_spm_class.m', 'file')
+              fprintf('✓ Class-based test files found\n');
+          else
+              warning('Class-based test files not found');
+          end
+          
           % Verify SPM can be initialized
           try
               spm('defaults', 'fmri');
               fprintf('✓ SPM can be initialized\n');
           catch ME
               fprintf('✗ SPM initialization failed: %s\n', ME.message);
+          end
+          
+    - name: Test class-based tests in MATLAB environment
+      uses: matlab-actions/run-command@v2
+      with:
+        command: |
+          % Set up paths
+          addpath(pwd);
+          addpath(fullfile(pwd, 'config'));
+          
+          % Initialize SPM
+          try
+              spm('defaults', 'fmri');
+              fprintf('✓ SPM initialized for testing\n');
+          catch ME
+              fprintf('⚠ SPM initialization warning: %s\n', ME.message);
+          end
+          
+          % Test class-based test runner
+          if exist('spm_tests_class.m', 'file')
+              try
+                  fprintf('Testing class-based test runner...\n');
+                  
+                  % Test discovery mode
+                  fprintf('Running class-based test discovery...\n');
+                  results = spm_tests_class('display', true, 'verbose', 1);
+                  
+                  % Report results
+                  if ~isempty(results)
+                      passed = sum([results.Passed]);
+                      failed = sum([results.Failed]);
+                      incomplete = sum([results.Incomplete]);
+                      total = numel(results);
+                      
+                      fprintf('\n=== Class-Based Test Results ===\n');
+                      fprintf('Total tests: %d\n', total);
+                      fprintf('Passed: %d\n', passed);
+                      fprintf('Failed: %d\n', failed);
+                      fprintf('Incomplete: %d\n', incomplete);
+                      
+                      if failed > 0
+                          fprintf('⚠ Some class-based tests failed\n');
+                      else
+                          fprintf('✓ All class-based tests passed\n');
+                      end
+                  else
+                      fprintf('ℹ No class-based tests found\n');
+                  end
+                  
+              catch ME
+                  fprintf('✗ Class-based test runner failed: %s\n', ME.message);
+                  % Don't fail the workflow, just warn
+              end
+          else
+              fprintf('ℹ Class-based test runner not available\n');
           end
           
     - name: Compile SPM to standalone
@@ -185,6 +258,10 @@ jobs:
                 echo "Testing custom test command:"
                 "$SPM_SCRIPT" "$MCR_ROOT" test || echo "Test command completed (check output above)"
                 
+                # Test class-based test command if available
+                echo "Testing class-based test command:"
+                "$SPM_SCRIPT" "$MCR_ROOT" test_class || echo "Class-based test command completed (check output above)"
+                
             else
                 echo "⚠ MATLAB Runtime path not found, trying script without explicit path..."
                 echo "Available paths:"
@@ -199,6 +276,9 @@ jobs:
                 
                 echo "Testing custom test command:"
                 "$SPM_SCRIPT" test || echo "Test command completed (check output above)"
+                
+                echo "Testing class-based test command:"
+                "$SPM_SCRIPT" test_class || echo "Class-based test command completed (check output above)"
             fi
             
         elif [ -n "$SPM_EXE" ]; then
@@ -209,6 +289,9 @@ jobs:
             
             echo "Testing custom test command:"
             "$SPM_EXE" test || echo "Direct executable failed (expected without MCR setup)"
+            
+            echo "Testing class-based test command:"
+            "$SPM_EXE" test_class || echo "Class-based test failed (expected without MCR setup)"
             
         else
             echo "✗ No SPM executable or script found"
@@ -335,6 +418,9 @@ jobs:
             echo "Testing SPM standalone test command:"
             "$SPM_SCRIPT" "$MCR_ROOT" test || echo "Test command completed"
             
+            echo "Testing SPM class-based test command:"
+            "$SPM_SCRIPT" "$MCR_ROOT" test_class || echo "Class-based test command completed"
+            
         elif [ -n "$SPM_SCRIPT" ]; then
             echo "⚠ MCR not found, testing without explicit path..."
             
@@ -346,6 +432,9 @@ jobs:
             
             echo "Testing SPM standalone test command:"
             "$SPM_SCRIPT" test || echo "Test command completed"
+            
+            echo "Testing SPM class-based test command:"
+            "$SPM_SCRIPT" test_class || echo "Class-based test command completed"
             
         else
             echo "✗ SPM script not found in installation"
