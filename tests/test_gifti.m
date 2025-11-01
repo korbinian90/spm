@@ -1,11 +1,11 @@
-function tests = test_gifti
+classdef test_gifti < matlab.unittest.TestCase
 % Unit Tests for gifti
 %__________________________________________________________________________
 
 % Copyright (C) 2018-2022 Wellcome Centre for Human Neuroimaging
 
 
-tests = functiontests(localfunctions);
+methods (Test)
 
 
 function test_gifti_constructor(testCase)
@@ -38,7 +38,7 @@ testCase.verifyThat(struct(g4), IsEqualTo(s));
 
 testCase.verifyThat(g5, IsOfClass('gifti'));
 testCase.verifyThat(g5, HasField('cdata'));
-
+end
 
 function test_gifti_accessor(testCase)
 import matlab.unittest.constraints.*
@@ -55,7 +55,7 @@ g2 = gifti(cdata);
 testCase.verifyEqual(cdata,g2.cdata);
 testCase.verifyEqual(cdata(8),g2.cdata(8));
 testCase.verifyEqual(cdata(8,1),g2.cdata(8,1));
-
+end
 
 function test_gifti_mutator(testCase)
 import matlab.unittest.constraints.*
@@ -83,7 +83,7 @@ g.cdata = rand(size(g.vertices,1),1);
 g.cdata(1) = pi;
 g.cdata(2:end) = exp(1);
 testCase.verifyEqual(g.cdata(1), single(pi));
-
+end
 
 function test_gifti_export(testCase)
 import matlab.unittest.constraints.*
@@ -105,7 +105,7 @@ testCase.verifyThat(s, HasField('tri'));
 s = export(g,'spm');
 testCase.verifyThat(s, HasField('vert'));
 testCase.verifyThat(s, HasField('face'));
-
+end
 
 function test_gifti_load(testCase)
 import matlab.unittest.constraints.*
@@ -114,6 +114,7 @@ files = dir(fullfile(d,'*.gii'));
 for i=1:numel(files)
     g = gifti(fullfile(d,files(i).name));
     testCase.verifyThat(evalc('g'), ~IsEmpty); % check display()
+end
 end
 
 
@@ -154,3 +155,9 @@ for i=1:numel(encoding)
         end
     end
 end
+
+end
+
+end % methods (Test)
+
+end % classdef
