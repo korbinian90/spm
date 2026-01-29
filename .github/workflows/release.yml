@@ -118,7 +118,7 @@ jobs:
         if: runner.os == 'macOS'
         run: |
           # 1. Prepare Release Folder with Versioned Subfolder
-          APP_FOLDER_NAME="SPM_${{ env.BUILD_TAG }}"
+          APP_FOLDER_NAME="SPM_${{ github.ref_name }}"
           ROOT_DIR="release_package/SPM_MacOS_Release"
           APP_DIR="$ROOT_DIR/$APP_FOLDER_NAME"
           mkdir -p "$APP_DIR"
@@ -186,9 +186,9 @@ jobs:
           echo "Zipping release..."
           cd "release_package"
           if [ "${{ matrix.version }}" == "latest" ]; then
-             zip -r -y "$GITHUB_WORKSPACE/../spm_standalone_${{ env.BUILD_TAG }}_${{ matrix.os_name }}.zip" ./*
+             zip -r -y "$GITHUB_WORKSPACE/../spm_standalone_${{ github.ref_name }}_${{ matrix.os_name }}.zip" ./*
           else
-             zip -r -y "$GITHUB_WORKSPACE/../spm_standalone_${{ env.BUILD_TAG }}_${{ matrix.os_name }}_${{ env.MATLAB_VERSION }}.zip" ./*
+             zip -r -y "$GITHUB_WORKSPACE/../spm_standalone_${{ github.ref_name }}_${{ matrix.os_name }}_${{ env.MATLAB_VERSION }}.zip" ./*
           fi
 
       - name: Install zip on Windows
@@ -203,9 +203,9 @@ jobs:
           cd ..
           mv standalone spm_standalone
           if [ "${{ matrix.version }}" == "latest" ]; then
-             zip -r spm_standalone_${{ env.BUILD_TAG }}_${{ matrix.os_name }}.zip spm_standalone runtime_installer
+             zip -r spm_standalone_${{ github.ref_name }}_${{ matrix.os_name }}.zip spm_standalone runtime_installer
           else
-             zip -r spm_standalone_${{ env.BUILD_TAG }}_${{ matrix.os_name }}_${{ env.MATLAB_VERSION }}.zip spm_standalone runtime_installer
+             zip -r spm_standalone_${{ github.ref_name }}_${{ matrix.os_name }}_${{ env.MATLAB_VERSION }}.zip spm_standalone runtime_installer
           fi
 
       - name: Release standalone
