@@ -179,10 +179,19 @@ jobs:
              echo "Warning: No icon source found."
           fi
 
-          # 5. Copy Instructions & Update Placeholder
-          cp "README_MACOS.txt" "$ROOT_DIR/"
+          # 5. Ad-Hoc Sign (Fixes Library Validation & "Damaged" errors)
+          echo "Ad-Hoc Signing App Bundle..."
+          # Sign the bundle deep
+          codesign --force --deep -s - "$APP_DIR/SPM.app"
+          # Verify (Optional output)
+          codesign -dv --verbose=4 "$APP_DIR/SPM.app" || true
 
-          # 6. Zip Release
+          # 6. Copy Instructions & Update Placeholder
+          cp "README_MACOS.txt" "$ROOT_DIR/"
+          cp "setup_mac.command" "$ROOT_DIR/"
+          chmod +x "$ROOT_DIR/setup_mac.command"
+
+          # 7. Zip Release
           echo "Zipping release..."
           cd "release_package"
           if [ "${{ matrix.version }}" == "latest" ]; then
