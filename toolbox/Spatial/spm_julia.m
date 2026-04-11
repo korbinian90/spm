@@ -47,7 +47,7 @@ end
 function s = settings
 % Return a structure of configuration paths and settings.
     s = struct;
-    s.julia_version = '1.10';
+    s.julia_version = '1.10.10';
     s.spatial_dir   = fullfile(spm('dir'),'toolbox','Spatial');
     s.julia_project = fullfile(s.spatial_dir,'julia');
     s.matfrost_dir  = fullfile(s.spatial_dir,'@matfrostjulia');
@@ -139,7 +139,7 @@ function sts = install_julia(s)
         return
     end
 
-    version = '1.10.10';
+    version = s.julia_version;
     json_file = websave(tempname,'https://julialang-s3.julialang.org/bin/versions.json');
     if isempty(json_file)
         error('Cannot obtain the versions.json file from the web.')
@@ -193,8 +193,9 @@ function sts = install_matfrost(s)
 % Install MATFrost MATLAB bindings into the Spatial toolbox directory.
     sts = 0;
     fprintf('Installing MATFrost MATLAB bindings... ')
-    cmd = sprintf('%s --project="%s" -e "import Pkg; Pkg.instantiate(); using MATFrost; MATFrost.install(ARGS[1])" "%s"',...
-                  s.julia_cmd, s.julia_project, s.spatial_dir);
+    julia_code = 'import Pkg; Pkg.instantiate(); using MATFrost; MATFrost.install(ARGS[1])';
+    cmd = sprintf('%s --project="%s" -e "%s" "%s"',...
+                  s.julia_cmd, s.julia_project, julia_code, s.spatial_dir);
     [sts, result] = run_julia_cmd(s, cmd);
     if sts ~= 0
         fprintf('Failed!\n')
@@ -243,7 +244,14 @@ function jl = get_server
         end
 
         % Start MATFrost server with SPM's Julia project
-        jl_server = matfrostjulia(project=s.julia_project);
+        try
+            jl_server = matfrostjulia(project=s.julia_project);
+        catch ME
+            error('spm_julia:server', ...
+                  ['Failed to start MATFrost server. Ensure Julia is installed and\n' ...
+                   'the project environment is set up (run spm_julia(''setup'')).\n' ...
+                   'Error: %s'], ME.message);
+        end
         server_state('set', jl_server);
     end
 

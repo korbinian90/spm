@@ -7,6 +7,8 @@ using ROMEO
 
 Unwrap a single 3D phase volume using ROMEO.
 Returns the unwrapped phase as a Float32 array.
+Note: Data is promoted to Float64 internally for numerical stability
+in ROMEO's unwrapping algorithm, then converted back to Float32.
 """
 function romeo_unwrap_3d(phase::Array{Float32,3}, mag::Array{Float32,3})
     return Float32.(ROMEO.unwrap(Float64.(phase); mag=Float64.(mag), correctglobal=true))
