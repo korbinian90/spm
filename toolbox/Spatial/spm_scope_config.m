@@ -166,7 +166,7 @@ vdm_prior_select.val    ={no_vdm_prior} ;
 vdm_prior_select.help = {
     'Optional: Compute or provide initial Voxel Displacement Map (VDM) estimate.'
     'Calculating initial VDM estimate can improve distortion correction accuracy especially in highly-distorted scans.'
-    'WARNING: On first use, "Calculate initial estimate" feature will automatically download julia and add MriResearchTools julia source code'
+    'WARNING: On first use, "Calculate initial estimate" will automatically set up Julia and MATFrost.jl for ROMEO phase unwrapping.'
     } ;
 
 %--------------------------------------------------------------------------

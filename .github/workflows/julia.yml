@@ -1,0 +1,140 @@
+name: Julia MATFrost Tests
+on:
+  pull_request:
+    paths:
+      - 'toolbox/Spatial/spm_julia.m'
+      - 'toolbox/Spatial/spm_est_vdm_from_phase.m'
+      - 'toolbox/Spatial/julia/**'
+      - '.github/workflows/julia.yml'
+  workflow_dispatch:
+  schedule:
+    - cron: '0 4 * * 1'
+
+jobs:
+  julia-matfrost-tests:
+    name: Julia MATFrost (${{ matrix.os }}, Julia ${{ matrix.julia-version }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
+        julia-version: ['1.10']
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Julia
+        uses: julia-actions/setup-julia@v2
+        with:
+          version: ${{ matrix.julia-version }}
+
+      - name: Cache Julia packages
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.julia/registries
+            ~/.julia/packages
+            ~/.julia/compiled
+          key: julia-${{ matrix.os }}-${{ matrix.julia-version }}-${{ hashFiles('toolbox/Spatial/julia/Project.toml') }}
+          restore-keys: |
+            julia-${{ matrix.os }}-${{ matrix.julia-version }}-
+
+      - name: Instantiate Julia project
+        shell: bash
+        run: |
+          julia --project="toolbox/Spatial/julia" -e '
+            import Pkg
+            Pkg.instantiate()
+            Pkg.status()
+          '
+
+      - name: Install MATFrost MATLAB bindings
+        shell: bash
+        run: |
+          julia --project="toolbox/Spatial/julia" -e '
+            using MATFrost
+            MATFrost.install("toolbox/Spatial")
+          '
+
+      - name: Verify MATFrost bindings installed
+        shell: bash
+        run: |
+          test -d "toolbox/Spatial/@matfrostjulia" || (echo "MATFrost bindings not found" && exit 1)
+          echo "MATFrost MATLAB bindings installed successfully"
+
+      - name: Test Julia wrapper module loads
+        shell: bash
+        run: |
+          julia --project="toolbox/Spatial/julia" -e '
+            using SPMSpatial
+            println("SPMSpatial module loaded successfully")
+          '
+
+      - name: Test ROMEO unwrapping (3D)
+        shell: bash
+        run: |
+          julia --project="toolbox/Spatial/julia" -e '
+            using SPMSpatial
+
+            # Create synthetic 3D wrapped phase data
+            phase = Float32.(2π .* rand(16, 16, 8) .- π)
+            mag   = Float32.(100 .* rand(16, 16, 8))
+
+            # Test 3D unwrapping
+            result = SPMSpatial.romeo_unwrap_3d(phase, mag)
+            @assert size(result) == size(phase) "Output size mismatch"
+            @assert eltype(result) == Float32 "Output type mismatch"
+            println("3D unwrapping test passed: size=$(size(result)), eltype=$(eltype(result))")
+          '
+
+      - name: Test ROMEO unwrapping (4D)
+        shell: bash
+        run: |
+          julia --project="toolbox/Spatial/julia" -e '
+            using SPMSpatial
+
+            # Create synthetic 4D wrapped phase data (3 volumes)
+            phase = Float32.(2π .* rand(16, 16, 8, 3) .- π)
+            mag   = Float32.(100 .* rand(16, 16, 8, 3))
+
+            # Test 4D unwrapping
+            result = SPMSpatial.romeo_unwrap_4d(phase, mag)
+            @assert size(result) == size(phase) "Output size mismatch"
+            @assert eltype(result) == Float32 "Output type mismatch"
+            println("4D unwrapping test passed: size=$(size(result)), eltype=$(eltype(result))")
+          '
+
+      - name: Set up MATLAB
+        uses: matlab-actions/setup-matlab@v2
+        with:
+          release: latest
+
+      - name: Test MATFrost server from MATLAB
+        uses: matlab-actions/run-command@v2
+        with:
+          command: |
+            addpath(fullfile(pwd,'toolbox','Spatial'));
+            addpath(fullfile(pwd,'toolbox','Spatial','@matfrostjulia'));
+
+            % Start MATFrost server with SPM Julia project
+            project_dir = fullfile(pwd,'toolbox','Spatial','julia');
+            jl = matfrostjulia(project=project_dir);
+
+            % Test 3D unwrapping
+            phase3d = single(2*pi*rand(16,16,8) - pi);
+            mag3d   = single(100*rand(16,16,8));
+            result3d = jl.SPMSpatial.romeo_unwrap_3d(phase3d, mag3d);
+            assert(isequal(size(result3d), size(phase3d)), '3D size mismatch');
+            assert(isa(result3d, 'single'), '3D type mismatch');
+            disp('MATLAB MATFrost 3D test passed');
+
+            % Test 4D unwrapping
+            phase4d = single(2*pi*rand(16,16,8,3) - pi);
+            mag4d   = single(100*rand(16,16,8,3));
+            result4d = jl.SPMSpatial.romeo_unwrap_4d(phase4d, mag4d);
+            assert(isequal(size(result4d), size(phase4d)), '4D size mismatch');
+            assert(isa(result4d, 'single'), '4D type mismatch');
+            disp('MATLAB MATFrost 4D test passed');
+
+            delete(jl);
+            disp('All MATFrost tests passed!');

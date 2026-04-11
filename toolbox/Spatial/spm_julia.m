@@ -1,293 +1,318 @@
 function varargout = spm_julia(opt, varargin)
-% Run Julia code from SPM
+% Run Julia code from SPM via MATFrost
 % FORMAT s = spm_julia('settings')
 %     s - a structure containing various settings
 %
-% FORMAT sts = spm_julia('install')
-% Install Julia within SPM. If it exists already, then do nothing.
+% FORMAT sts = spm_julia('setup')
+% Set up Julia and MATFrost within SPM. Downloads Julia if not found,
+% installs MATFrost MATLAB bindings, and instantiates the Julia project
+% environment.
 %
-% FORMAT sts = spm_julia('install','force')
-% Install Julia within SPM - irrespective of whether it seems to be
-% there or not.
+% FORMAT sts = spm_julia('setup','force')
+% Force re-setup of Julia and MATFrost, even if already installed.
 %
-% FORMAT sts = spm_julia('add-package', package1, package2, ...)
-% Add Julia packages, where package1, package2, etc are names of registered
-% packages.  Unregistered packages can be installed by giving their url
-% within a structure. Note that fields 'rev' and 'version' can also be
-% included in the structure, where 'version' could be e.g. 'v0.2.1'
-% (v"0.2.1" in Julia) or '0.2' ("0.2" in Julia).  For example:
-%     pkg_spec = struct('url','https://github.com/spm/PushPull.jl');
-%     sts      = spm_julia('add-package', pkg_spec)
+% FORMAT jl = spm_julia('server')
+% Return a MATFrost server handle for calling Julia functions. Starts the
+% server if not already running and performs setup if needed.
 %
-% FORMAT [sts,result] = spm_julia('run', cmd)
-% Execute a command with julia -e
+% Example usage:
+%     jl = spm_julia('server');
+%     result = jl.SPMSpatial.romeo_unwrap_3d(single(phase), single(mag));
 %
-% FORMAT [sts,result] = spm_julia('run', cmd, package1, package2, ...)
-% Checks for presence of packages, and installs them if necessary.
-% Prepends use of packages before cmd.
+% FORMAT spm_julia('shutdown')
+% Shut down the MATFrost server.
 %
 % For more information about the Julia language, see https://julialang.org/
+% For more information about MATFrost, see https://github.com/ASML-Labs/MATFrost.jl
 %__________________________________________________________________________
 
 % John Ashburner
 % Copyright (C) 2026 Functional Imaging Lab, UCL Institute of Neurology
 
-    s = settings;
-    setenv('JULIA_DEPOT_PATH',s.julia_depot_path)
     switch lower(opt)
-        case 'add-package'
-            varargout{1} = add_pkgs(s, varargin);
-        case 'install'
-            varargout{1} = install(s, varargin{:});
-        case 'run'
-            [varargout{1:nargout}] = run(s,varargin{1},varargin(2:end));
+        case 'setup'
+            varargout{1} = setup(varargin{:});
+        case 'server'
+            varargout{1} = get_server;
+        case 'shutdown'
+            shutdown_server;
         case 'settings'
-            varargout{1} = s;
+            varargout{1} = settings;
         otherwise
-            if nargin==1
-                [varargout{1:nargout}] = run(s,opt);
-            else
-                [varargout{1:nargout}] = run(s,opt,varargin);
-            end
+            error('Unknown option: %s', opt);
     end
 end
 
-function [sts, result] = run(s, fun, pkgs)
-    install(s);
-    if nargin>=3
-        add_pkgs(s, to_install(s,pkgs));
-        expr = '';
-        for i=1:length(pkgs)
-            pkg  = pkg_name(pkgs{i});
-            expr = [expr 'using ' pkg '; '];
-        end
-        expr = [expr fun];
-    else
-        expr = fun;
-    end
-    if nargout<2
-        sts = run_julia_cmd(s,expr);
-    else
-        [sts,result] = run_julia_cmd(s,expr);
-    end
+
+function s = settings
+% Return a structure of configuration paths and settings.
+    s = struct;
+    s.julia_version = '1.10';
+    s.spatial_dir   = fullfile(spm('dir'),'toolbox','Spatial');
+    s.julia_project = fullfile(s.spatial_dir,'julia');
+    s.matfrost_dir  = fullfile(s.spatial_dir,'@matfrostjulia');
+    s.iswin         = ispc;
+    s.comp          = computer;
+
+    % Julia binary: prefer juliaup, then PATH, then local install
+    s.julia_cmd     = find_julia(s);
 end
 
-function sts = install(s,varargin)
-    sts = 0;
-    if ~exist(s.cmd,'file') || (nargin>=2 && any(strcmp(varargin,'force')))
 
-        % Check that the user is happy to have Julia installed
-        str = { 'This functionality needs the Julia language',...
-                '(https://julialang.org/), which will be',...
-                'installed automatically from the internet.',...
-                '',...
-                'Are you happy for Julia to be installed?'};
-        if spm_input(str,1,'bd','Yes|No',[0,1],1,mfilename)
-            % User not happy, so crash out
-            fprintf('%-40s: %30s\n\n',...
-                'Abort...   (User does not want Julia)',spm('time'));
-            sts = 1;
+function cmd = find_julia(s)
+% Locate the Julia binary. Checks juliaup, then PATH, then local install.
+    if s.iswin
+        ext = '.exe';
+    else
+        ext = '';
+    end
+
+    % Check for julia on PATH
+    [sts,~] = system('julia --version');
+    if sts == 0
+        cmd = 'julia';
+        return
+    end
+
+    % Check for juliaup-managed julia
+    [sts,~] = system('juliaup status');
+    if sts == 0
+        cmd = 'julia';
+        return
+    end
+
+    % Check for locally installed Julia
+    local_dir = fullfile(spm('dir'),'toolbox','Spatial','Apps',lower(s.comp));
+    candidates = dir(fullfile(local_dir,'julia-*'));
+    for i = 1:length(candidates)
+        local_cmd = fullfile(local_dir,candidates(i).name,'bin',['julia' ext]);
+        if exist(local_cmd,'file')
+            cmd = local_cmd;
             return
         end
-
-        json_file = websave(tempname,'https://julialang-s3.julialang.org/bin/versions.json');
-        if isempty(json_file)
-            error('Can not obtain the versions.json file from the web.')
-        end
-        json = spm_jsonread(json_file);
-        delete(json_file);
-
-        files = json.(['x' replace(s.version,'.','_')]).files;
-        switch s.comp
-            case 'GLNXA64'
-                opt = findfile('x86_64-linux-gnu', files);
-            case 'PCWIN64'
-                opt = findfile('x86_64-w64-mingw32', files);
-            case 'MACI64'
-                % x86_64
-                opt = findfile('x86_64-apple-darwin14', files);
-            case 'MACA64'
-                % Unsure
-                opt = findfile('aarch64-apple-darwin14', files);
-            case 'ARM'
-                % Unsure
-                opt = findfile('aarch64-linux-gnu', files);
-            otherwise
-               error(['Something went wrong! Computer is ' s.comp '.'])
-        end
-
-        if ~isempty(opt)
-            mkdir_rec(s.appdir)
-            fprintf('Downloading "%s" ... ', opt.url)
-            compr_file = fullfile(s.appdir,['install.' opt.extension]);
-            websave(compr_file, opt.url);
-            fprintf('...Done\n')
-            fprintf('Unpacking "%s" ... ', compr_file);
-            switch opt.extension
-                case {'tar.gz','tar','tgz'}
-                    untar(compr_file,s.appdir)
-                case 'zip'
-                    unzip(compr_file,s.appdir)
-                otherwise
-                    error(['Something went wrong! Extension is ' opt.extension '.']);
-            end
-            delete(compr_file);
-            fprintf(' ...Done\n')
-        else
-            error(['Something went wrong! Nothing suitable for ' s.comp '.']);
-        end
-        spm_registry = 'https://github.com/spm/SPM-registry.jl';
-        [sts,result] = run_julia_cmd(s,['using Pkg; pkg"registry add General"; pkg"registry add ' spm_registry '"']);
-        if sts~=0
-            error('Failed to add SPM-registry!')
-        end
     end
+
+    cmd = '';
 end
 
 
-function sts = add_pkgs(s, pkg_list)
+function sts = setup(varargin)
+% Set up Julia and MATFrost.
     sts = 0;
-    if ~isempty(pkg_list)
-        fprintf('\n---- Installing Julia packages ----\n')
-        for i=1:length(pkg_list)
-            sts = sts | add_pkg(s,pkg_list{i});
-        end
-        fprintf('-----------------------------------\n')
+    s   = settings;
+
+    force = nargin >= 1 && any(strcmp(varargin,'force'));
+
+    % Step 1: Ensure Julia is available
+    if isempty(s.julia_cmd) || force
+        sts = install_julia(s);
+        if sts ~= 0, return; end
+        s = settings; % Refresh settings after install
     end
+
+    % Step 2: Install MATFrost MATLAB bindings
+    if ~exist(s.matfrost_dir,'dir') || force
+        sts = install_matfrost(s);
+        if sts ~= 0, return; end
+    end
+
+    % Step 3: Instantiate the Julia project environment
+    sts = instantiate_project(s);
 end
 
 
-function sts = add_pkg(s, pkg)
-    [sts,result] = run_julia_cmd(s, ['import Pkg; Pkg.add(' addstr(pkg) ');']);
-    if sts~=0
-        fprintf('\n\n###### Installation of %s failed! ######\n\n', pkg_name(pkg))
+function sts = install_julia(s)
+% Download and install Julia if not present.
+    sts = 0;
+
+    % Check that the user is happy to have Julia installed
+    str = { 'This functionality needs the Julia language',...
+            '(https://julialang.org/) and MATFrost.jl',...
+            '(https://github.com/ASML-Labs/MATFrost.jl),',...
+            'which will be installed automatically from the internet.',...
+            '',...
+            'Are you happy for Julia to be installed?'};
+    if spm_input(str,1,'bd','Yes|No',[0,1],1,mfilename)
+        fprintf('%-40s: %30s\n\n',...
+            'Abort...   (User does not want Julia)',spm('time'));
+        sts = 1;
+        return
+    end
+
+    version = '1.10.10';
+    json_file = websave(tempname,'https://julialang-s3.julialang.org/bin/versions.json');
+    if isempty(json_file)
+        error('Cannot obtain the versions.json file from the web.')
+    end
+    json = spm_jsonread(json_file);
+    delete(json_file);
+
+    files = json.(['x' replace(version,'.','_')]).files;
+    switch s.comp
+        case 'GLNXA64'
+            opt = findfile('x86_64-linux-gnu', files);
+        case 'PCWIN64'
+            opt = findfile('x86_64-w64-mingw32', files);
+        case 'MACI64'
+            opt = findfile('x86_64-apple-darwin14', files);
+        case 'MACA64'
+            opt = findfile('aarch64-apple-darwin14', files);
+        case 'ARM'
+            opt = findfile('aarch64-linux-gnu', files);
+        otherwise
+            error('Unsupported platform: %s', s.comp);
+    end
+
+    if isempty(opt)
+        error('No suitable Julia binary found for %s.', s.comp);
+    end
+
+    appdir = fullfile(spm('dir'),'toolbox','Spatial','Apps',lower(s.comp));
+    if ~exist(appdir,'dir'), mkdir(appdir); end
+
+    fprintf('Downloading "%s" ... ', opt.url)
+    compr_file = fullfile(appdir,['install.' opt.extension]);
+    websave(compr_file, opt.url);
+    fprintf('Done\n')
+
+    fprintf('Unpacking "%s" ... ', compr_file);
+    switch opt.extension
+        case {'tar.gz','tar','tgz'}
+            untar(compr_file,appdir)
+        case 'zip'
+            unzip(compr_file,appdir)
+        otherwise
+            error('Unknown archive format: %s', opt.extension);
+    end
+    delete(compr_file);
+    fprintf('Done\n')
+end
+
+
+function sts = install_matfrost(s)
+% Install MATFrost MATLAB bindings into the Spatial toolbox directory.
+    sts = 0;
+    fprintf('Installing MATFrost MATLAB bindings... ')
+    cmd = sprintf('%s --project="%s" -e "import Pkg; Pkg.instantiate(); using MATFrost; MATFrost.install(ARGS[1])" "%s"',...
+                  s.julia_cmd, s.julia_project, s.spatial_dir);
+    [sts, result] = run_julia_cmd(s, cmd);
+    if sts ~= 0
+        fprintf('Failed!\n')
         disp(result)
-        fprintf(  '\n###### Installation of %s failed! ###### (see errors above)\n\n', pkg_name(pkg))
+        error('MATFrost installation failed.')
+    end
+    fprintf('Done\n')
+end
+
+
+function sts = instantiate_project(s)
+% Instantiate the Julia project environment (download/precompile packages).
+    sts = 0;
+    fprintf('Instantiating Julia project environment... ')
+    cmd = sprintf('%s --project="%s" -e "import Pkg; Pkg.instantiate()"',...
+                  s.julia_cmd, s.julia_project);
+    [sts, result] = run_julia_cmd(s, cmd);
+    if sts ~= 0
+        fprintf('Failed!\n')
+        disp(result)
+        error('Julia project instantiation failed.')
+    end
+    fprintf('Done\n')
+end
+
+
+function jl = get_server
+% Return the MATFrost server handle, starting it if needed.
+    jl_server = server_state('get');
+
+    if isempty(jl_server) || ~isvalid_server(jl_server)
+        % Ensure setup is complete
+        s = settings;
+        if isempty(s.julia_cmd)
+            setup;
+            s = settings;
+        end
+        if ~exist(s.matfrost_dir,'dir')
+            setup;
+            s = settings;
+        end
+
+        % Add MATFrost to MATLAB path if needed
+        if ~exist('matfrostjulia','class')
+            addpath(s.matfrost_dir);
+        end
+
+        % Start MATFrost server with SPM's Julia project
+        jl_server = matfrostjulia(project=s.julia_project);
+        server_state('set', jl_server);
+    end
+
+    jl = jl_server;
+end
+
+
+function shutdown_server
+% Shut down the MATFrost server.
+    jl_server = server_state('get');
+    if ~isempty(jl_server)
+        try
+            delete(jl_server);
+        catch
+            % Server may already be stopped
+        end
+        server_state('set', []);
     end
 end
 
-function [sts,result] = run_julia_cmd(s,str)
-    if s.iswin
-        f = [s.cmd ' -e "' strrep(str,'"','\"') '"'];
-    else
-        f = [s.cmd ' -e '' ' str ' '' '];
-    end
-    disp(['julia -e ' str])
 
+function jl = server_state(action, val)
+% Manage the persistent MATFrost server handle.
+    persistent jl_server
+    switch action
+        case 'get'
+            jl = jl_server;
+        case 'set'
+            jl_server = val;
+            jl = jl_server;
+    end
+end
+
+
+function valid = isvalid_server(jl)
+% Check if a MATFrost server handle is still valid.
+    try
+        valid = isvalid(jl);
+    catch
+        valid = false;
+    end
+end
+
+
+function [sts, result] = run_julia_cmd(s, cmd)
+% Execute a Julia command via system call.
     if isunix
         paths = getenv('LD_LIBRARY_PATH');
         setenv('LD_LIBRARY_PATH');
     end
-    if nargout<2
-        sts = system(f);
+    if nargout < 2
+        sts = system(cmd);
     else
-        [sts,result] = system(f);
+        [sts, result] = system(cmd);
     end
     if isunix
         setenv('LD_LIBRARY_PATH', paths);
     end
 end
 
-function mkdir_rec(dr)
-    [parent,~] = fileparts(dr);
-    if ~exist(dr,'dir')
-        mkdir_rec(parent);
-        mkdir(dr);
-    end
-end
-
 
 function opt = findfile(arch, files)
+% Find the matching file entry for the given architecture.
     opt = {};
-    for i=1:length(files)
-        if strcmp(arch,files{i}.triplet) && ~strcmp('exe',files{i}.extension)
+    for i = 1:length(files)
+        if strcmp(arch, files{i}.triplet) && ~strcmp('exe', files{i}.extension)
             opt = files{i};
             return
         end
-    end
-end
-
-function s = settings
-    version = '1.10.10';
-    comp    = computer;
-    iswin   = ispc;
-    if iswin
-        ext = '.exe';
-    else
-        ext = '';
-    end
-    s = struct;
-    s.version = version;
-    s.appdir  = fullfile(spm('dir'),'toolbox','Spatial','Apps',lower(comp));
-    s.cmd     = fullfile(s.appdir,['julia-' version],'bin',['julia' ext]);
-    s.julia_depot_path = fullfile(s.appdir,'julia_depot');
-    s.iswin   = iswin;
-    s.comp    = comp;
-end
-
-function not_installed = to_install(s,list)
-    not_installed = {};
-    for i = 1:length(list)
-        pkg = list{i};
-        if ~pkg_exists(s,pkg)
-            not_installed = [not_installed, pkg];
-        end
-    end
-end
-
-
-function pkg = pkg_name(pkg)
-    if isa(pkg,'struct')
-        if isfield(pkg,'name')
-            [~,pkg,~] = fileparts(pkg.name);
-        elseif isfield(pkg,'url')
-            [~,pkg,~] = fileparts(pkg.url);
-        elseif isfield(pkg,'path')
-            [~,pkg,~] = fileparts(pkg.path);
-        else
-            pkg = '';
-        end
-    else
-        [~,pkg,~] = fileparts(pkg);
-    end
-end
-
-
-function answer = pkg_exists(s, pkg)
-    dname = fullfile(s.julia_depot_path,'packages', pkg_name(pkg));
-    if exist(dname,'dir')
-        answer = true;
-    else
-        answer = false;
-    end
-end
-
-
-function str = addstr(pkg)
-    if isa(pkg,'struct')
-        if isfield(pkg,'name')
-            str = ['name="' pkg.name '"'];
-        elseif isfield(pkg,'url')
-            str = ['url="' pkg.url '"'];
-        elseif isfield(pkg,'path')
-            str = ['path="' pkg.path '"'];
-        end
-        if isfield(pkg,'version')
-            str = [str verstr(pkg.version)];
-        end
-        if isfield(pkg,'rev')
-            str = [str ', rev="' pkg.rev '"'];
-        end
-    else
-        str = ['"' pkg '"'];
-    end
-end
-
-function str = verstr(version)
-    if length(version)>1 && version(1)=='v'
-        str = [', version=v"' version(2:end) '"'];
-    else
-        str = [', version="' version '"'];
     end
 end
 

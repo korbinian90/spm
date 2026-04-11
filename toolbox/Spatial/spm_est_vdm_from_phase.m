@@ -43,38 +43,14 @@ for f = 1:numel(vol1(:,1))
 end
 
 
-% write 4D magnitude image for ROMEO phase unwrapping
+% calling ROMEO phase unwrapping via MATFrost
 %--------------------------------------------------------------------------
-basename = spm_file(vol1(1,:),'basename');
-oname    = char(spm_file(basename,'prefix','4D_mag_','ext','.nii'));
-oname    = fullfile(outdir,oname);
-Nio      = nifti;
-Nio.dat  = file_array(oname,[size(Nii_mag)],'float32');
-Nio.mat  = nifti(vol1(1,:)).mat;
-create(Nio);
-Nio.dat(:,:,:,:) = Nii_mag;
-
-mag_file = oname;
-
-% write 4D phase image for ROMEO phase unwrapping
-%--------------------------------------------------------------------------
-basename = spm_file(vol1_pha(1,:),'basename');
-oname    = char(spm_file(basename,'prefix','4D_pha_','ext','.nii'));
-oname    = fullfile(outdir,oname);
-Nio      = nifti;
-Nio.dat  = file_array(oname,[size(Nii_pha)],'float32');
-Nio.mat  = nifti(vol1_pha(1,:)).mat;
-create(Nio);
-Nio.dat(:,:,:,:) = Nii_pha;
-
-pha_file = oname;
-
-% calling ROMEO phase unwrapping
-ROMEO_command = sprintf('unwrapping_main(["-p", "%s", "-m", "%s", "-o", "%s", "-t", "epi", "-v", "-i", "-g", "-k", "nomask"])', pha_file, mag_file, outdir);
-spm_julia('run', ROMEO_command, 'ROMEO','ArgParse', 'MriResearchTools')
-
-
-pha_unwr = nifti(fullfile(outdir, 'unwrapped.nii')).dat(:,:,:,:) ;
+jl = spm_julia('server');
+if ndims(Nii_pha) == 4 %#ok<ISMAT>
+    pha_unwr = jl.SPMSpatial.romeo_unwrap_4d(single(Nii_pha), single(Nii_mag));
+else
+    pha_unwr = jl.SPMSpatial.romeo_unwrap_3d(single(Nii_pha), single(Nii_mag));
+end
 pha_unwr = mean(pha_unwr,4) ;
 
 vdm_pha = pha_unwr*total_readout_time/(2*pi*TE)*PE_dir ;

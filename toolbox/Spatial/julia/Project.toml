@@ -1,0 +1,8 @@
+name = "SPMSpatial"
+uuid = "c8e4a7b2-1f3d-4e5a-b6c7-8d9e0f1a2b3c"
+authors = ["SPM Developers"]
+version = "0.1.0"
+
+[deps]
+MATFrost = "406cae98-a0f7-4766-b83f-8510a556e0e7"
+ROMEO = "3c4c41f8-897c-4a8a-9a42-9e389bba3e84"

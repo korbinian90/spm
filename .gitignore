@@ -5,3 +5,6 @@ src/*.mex*
 tests/data
 toolbox/mb/data
 external/mritools
+toolbox/Spatial/@matfrostjulia
+toolbox/Spatial/julia/Manifest.toml
+toolbox/Spatial/Apps
