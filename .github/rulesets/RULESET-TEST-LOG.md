@@ -31,7 +31,7 @@ Settings -> Rules -> Rulesets -> "New ruleset" -> "Import a ruleset".
   design is viable.
 - korbinian90/spm had `required_pull_request_reviews` with
   `required_approving_review_count: 1`. Removed for the duration of the test so it
-  could not mask ruleset behaviour. Backed up first; contents recorded in section 7.
+  could not mask ruleset behaviour. Backed up first; contents recorded in section 8.
 
 **Live check names on a recent spm/spm PR** (#151, head `317a80e4b`):
 
@@ -113,6 +113,8 @@ context `Tests passed` pinned to `integration_id: 15368`.
 | T10 | PR, re-verify | empty | auto-merge fires after check | **PASS** |
 | T11 | Direct push | one named **User** | accepted | **PASS** |
 | T12 | Direct push | named User, `bypass_mode: "pull_request"` | rejected | **PASS** |
+| T13 | `git push --dry-run` against a blocked ref | empty | reports the violation | **it does not** |
+| T14 | Push by the **Actions bot** (GITHUB_TOKEN) | empty | see section 7 | **rejected** |
 
 ### T1 - direct push rejected with an empty bypass list
 
@@ -219,6 +221,26 @@ remote: - Required status check "Tests passed" is expected.
 So `"always"` is the **minimum** grant that allows pushing to `main`, and it
 unavoidably carries the `--admin` PR override with it. The two capabilities cannot be
 separated. See section 5.
+
+### T13 - `git push --dry-run` does not see the ruleset
+
+Against a `main` that genuinely rejects the push, `--dry-run` reported success:
+
+```
+$ git push --dry-run korbinian90 HEAD:main
+   43a9cdbdc..878fa0e1a  HEAD -> main
+exit=0
+```
+
+`main` did not move, and the same push without `--dry-run` was rejected. Ruleset
+evaluation happens in the pre-receive hook, which `--dry-run` never reaches. **Do not
+use `--dry-run` to check whether someone can push**, it returns a false pass. Use the
+`current_user_can_bypass` field on the ruleset instead, which tracked the real outcome
+exactly across T1, T2, T9, T11 and T12.
+
+### T14 - the Actions bot is blocked, which breaks the CLA Assistant
+
+See section 7.
 
 ### T9 and T10 - re-verified in active mode
 
@@ -408,7 +430,69 @@ Points worth knowing before you flip it on:
 
 ---
 
-## 7. Fork state after testing
+## 7. Blocker: the CLA Assistant pushes straight to `main`
+
+**This must be resolved before the ruleset goes active on spm/spm.** It is not a
+theoretical risk, it is verified.
+
+`.github/workflows/cla.yml` runs `contributor-assistant/github-action` with:
+
+```yaml
+path-to-signatures: 'signatures/version1/cla.json'
+# branch should not be protected
+branch: 'main'
+```
+
+The action commits each new signature and pushes it **directly to `main`** as
+`github-actions[bot]`, using `GITHUB_TOKEN`. It is doing so today:
+
+| Commit | Date | Author |
+|---|---|---|
+| `8e86b25f7` | 2026-07-23 | `github-actions[bot]` |
+| `5d7659477` | 2026-05-27 | `github-actions[bot]` |
+| `9c849392d` | 2026-02-24 | `github-actions[bot]` |
+
+The workflow's own comment, `# branch should not be protected`, says exactly what the
+problem is.
+
+**T14** reproduced this on the fork with a workflow that commits a signature file and
+pushes to `main` with `GITHUB_TOKEN`, the same way the real action does:
+
+```
+remote: error: GH013: Repository rule violations found for refs/heads/main.
+remote: - Required status check "Tests passed" is expected.
+ ! [remote rejected] HEAD -> main (push declined due to repository rule violations)
+RESULT: bot push REJECTED
+```
+
+So with the ruleset active, **every new external contributor's CLA signature fails to
+record.** Contributor onboarding breaks.
+
+### Three ways out
+
+1. **Move the signatures off the default branch.** Change `branch: 'main'` to a branch
+   like `cla-signatures` in `cla.yml`. The ruleset targets `~DEFAULT_BRANCH` only, so a
+   non-default branch is untouched. One line, no bypass grant, nothing widened. The
+   branch may need creating first. **Recommended.**
+
+2. **Store the signatures in a separate repository.** The action supports
+   `remote-organization-name` / `remote-repository-name` plus a PAT, and the comment in
+   `cla.yml` already anticipates it (`this can be 'read' if the signatures are in remote
+   repository`). Cleanest long term, most setup.
+
+3. **Add GitHub Actions as an `Integration` bypass actor**
+   (`{"actor_id": 15368, "actor_type": "Integration", "bypass_mode": "always"}`).
+   Zero workflow change. Two caveats: it lets **any** workflow using `GITHUB_TOKEN` push
+   straight to `main`, which is wider than the CLA bot alone; and it **could not be
+   verified here**. The fork is a personal repository, and the API refused the actor
+   with `Actor GitHub Actions integration must be part of the ruleset source or owner
+   organization`. It should be valid on spm/spm, which is org-owned, but that is an
+   expectation and not a tested result.
+
+Whichever route is taken, re-run T14's equivalent on spm/spm before trusting it: have a
+contributor sign, or trigger the CLA workflow, and confirm the signature commit lands.
+
+## 8. Fork state after testing
 
 Restored or left as follows:
 
