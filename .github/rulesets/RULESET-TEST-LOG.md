@@ -342,9 +342,10 @@ is auditable after the fact.
 
 ## 6. Importing into spm/spm
 
-1. **Check the bypass list.** It holds the 15 active maintainers below. Selection rule:
+1. **Check the bypass list.** It holds the 11 active maintainers below. Starting point:
    everyone who both **(a)** has `write` or better on spm/spm and **(b)** committed to
-   `main` in the 24 months to 2026-08-05. `SPMcentral` is deliberately excluded.
+   `main` in the 24 months to 2026-08-05, then narrowed by the SPM team to those still
+   active on the project. `SPMcentral` is deliberately excluded.
 
    | `actor_id` | Login | Commits to `main`, 24 mo | Role |
    |---|---|---|---|
@@ -359,23 +360,20 @@ is auditable after the fact.
    | 14932031 | `tierneytim` | 12 | maintain |
    | 8765418 | `pranaysy` | 5 | write |
    | 118210848 | `Y-Bezs` | 4 | write |
-   | 52764815 | `baskadym` | 2 | write |
-   | 7803834 | `balbasty` | 2 | write |
-   | 31136567 | `langestroop` | 1 | write |
-   | 5950855 | `gllmflndn` | 0 | admin |
-
-   `gllmflndn` is included as a deliberate exception: 2025 commits all-time, the single
-   largest contributor to the repository, last commit 2023-11-22 and so outside the
-   window. The activity rule alone would have dropped him, which would plainly be wrong.
 
    **Deliberately excluded**, each for a different reason:
 
    | Who | Why |
    |---|---|
    | `SPMcentral` (5950819) | the FieldTrip sync account. Omitting it is what gates the sync PR. See section 5. |
+   | `gllmflndn`, `langestroop`, `balbasty`, `baskadym` | committed to `main` inside the window but are no longer active on the project. Removed on the SPM team's instruction. |
    | `arthurmitchell96`, `cgohil8`, `oliviakowalczyk` | hold `write` but no commits to `main` in 24 months. **They can push today and would lose it.** Add them if that is wrong. |
    | `VolkmarGlauche`, `ChristophePhillips`, `tejparr`, `RCTimms`, `NicoleLabrAvila`, `stephaniemellor`, `suvadeepmaiti` | `triage` only, so they cannot push to `main` regardless. A bypass entry would do nothing. |
    | `georgeoneill`, `WillForan`, `Remi-Gau`, `RaniaImanV` | `read` or not collaborators. Their commits arrived through PRs. |
+
+   Note that these people keep their `write` role and can still contribute through pull
+   requests exactly as before. Dropping someone from the bypass list only removes the
+   ability to push straight to `main`.
 
    To add someone:
 
