@@ -1,0 +1,46 @@
+# TEST SCAFFOLDING - do not port to spm/spm.
+#
+# Reproduces what contributor-assistant/github-action (the CLA Assistant) does:
+# commit a signature file and push it straight to main using GITHUB_TOKEN, so the
+# pushing actor is the GitHub Actions app rather than a user.
+#
+# Used to check whether a required_status_checks ruleset blocks that push, and
+# whether an Integration bypass actor unblocks it.
+name: Ruleset Bot Push Test
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  bot-push:
+    name: Bot push to main
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Commit and push as the Actions bot
+        shell: bash
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+          mkdir -p signatures/version1
+          printf '{"signedContributors":[{"name":"test","id":%s}]}\n' "${GITHUB_RUN_ID}" \
+            > signatures/version1/cla.json
+
+          git add signatures/version1/cla.json
+          git commit -m "@testuser has signed the CLA in ${GITHUB_REPOSITORY}#999"
+
+          echo "=== attempting push to main as github-actions[bot] ==="
+          if git push origin HEAD:main; then
+            echo "RESULT: bot push ACCEPTED"
+          else
+            echo "RESULT: bot push REJECTED"
+            exit 1
+          fi
