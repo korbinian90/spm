@@ -111,6 +111,8 @@ context `Tests passed` pinned to `integration_id: 15368`.
 | T8 | Direct push, `enforcement: disabled` | empty | accepted, not logged | **PASS** |
 | T9 | Direct push, re-verify | empty | rejected | **PASS** |
 | T10 | PR, re-verify | empty | auto-merge fires after check | **PASS** |
+| T11 | Direct push | one named **User** | accepted | **PASS** |
+| T12 | Direct push | named User, `bypass_mode: "pull_request"` | rejected | **PASS** |
 
 ### T1 - direct push rejected with an empty bypass list
 
@@ -188,6 +190,36 @@ Direct push accepted silently, with no `Bypassed rule violations` banner and, no
 **no Rule Insights entry**. `disabled` gives you a parked ruleset but no dry-run
 telemetry, so it is a weaker staging tool than `evaluate` would have been.
 
+### T11 - individual people can be bypass actors
+
+`bypass_actors` accepts `actor_type: "User"`. With a **single named user** as the only
+bypass entry, and no role or team entry at all, `current_user_can_bypass` reported
+`"always"` and the direct push went through:
+
+```
+remote: Bypassed rule violations for refs/heads/main:
+remote: - Required status check "Tests passed" is expected.
+   f3bd1c2d6..e19f6507c  HEAD -> main
+```
+
+This is the mechanism to use for a named list of maintainers. It needs no team and no
+change to anyone's repository role.
+
+### T12 - `bypass_mode: "pull_request"` does not permit direct push
+
+Same named user, `bypass_mode` changed from `"always"` to `"pull_request"`:
+
+```
+current_user_can_bypass: "pull_requests_only"
+
+remote: - Required status check "Tests passed" is expected.
+ ! [remote rejected]     HEAD -> main (push declined due to repository rule violations)
+```
+
+So `"always"` is the **minimum** grant that allows pushing to `main`, and it
+unavoidably carries the `--admin` PR override with it. The two capabilities cannot be
+separated. See section 5.
+
 ### T9 and T10 - re-verified in active mode
 
 After flipping back to `active` with an empty bypass, T1 and T3 were repeated. Direct
@@ -217,7 +249,14 @@ Rule detail is available per suite, for example T1:
 
 ---
 
-## 4. Repository role ids
+## 4. Bypass actor types, and repository role ids
+
+`bypass_actors` accepts `User`, `Team`, `RepositoryRole`, `OrganizationAdmin` and
+`DeployKey`. **`User` works** (T11), which is what makes a named maintainer list
+possible. `bypass_mode` must be `"always"` for direct push; `"pull_request"` does not
+permit it (T12).
+
+If you would rather bypass by role than by name, the role ids follow.
 
 The role ids are **not** a contiguous 1 to 5 range. Probing each id and resolving the
 name through GraphQL (`bypassActors.repositoryRoleName`) gave:
@@ -274,29 +313,59 @@ The four-second merges on spm/spm PRs #143, #145, #148 and #149 are fully explai
 there being no required check on `main` at all. They are not evidence of bypass
 defeating a gate.
 
-**Consequence for the rollout.** The goal and the constraint are not actually in
-tension. A `RepositoryRole: write` bypass lets every maintainer keep direct-push access
-*and* leaves the FieldTrip sync PR gated, because `sync-fieldtrip.yml` calls
-`gh pr merge --auto --squash` and never passes `--admin`. That is why the shipped JSON
-carries the Write bypass.
+**Consequence for the rollout.** The goal and the constraint are not in tension, and
+T11 removes the difficulty entirely. `bypass_actors` accepts **individual users**, so
+the bypass list can name exactly the maintainers who should keep direct-push access and
+simply leave SPMcentral out. No new team, no role changes, and the earlier worry about
+SPMcentral being unavoidably included in every role or team is moot.
 
-**Residual risk, stated plainly.** SPMcentral will be a bypass actor under this
-configuration. It could push directly to `main` or `--admin`-merge a red PR. It has no
-code path that does either today, and this is the same access it already holds. If you
-would rather not accept that, set `"bypass_actors": []` and maintainers lose direct
-push to `main` (verified in T1, T7). There is no configuration that keeps maintainer
-direct-push while excluding SPMcentral, short of creating a new team that omits it and
-using a `Team` bypass actor.
+That is what the shipped JSON does. Both requirements hold simultaneously:
+
+- **Maintainers keep direct push to `main`** because they are named bypass actors (T11).
+- **The FieldTrip sync PR stays gated** because SPMcentral is not a bypass actor, so its
+  `gh pr merge --auto --squash` waits for `Tests passed` like anyone else. T3 and T10
+  prove a **non-bypassing** account's auto-merge works normally once the check goes
+  green: PRs #6 and #11 were armed by an account with `current_user_can_bypass: "never"`
+  and merged about 55 and 67 seconds later. SPMcentral needs no bypass at all.
+
+**Nobody needs elevated repository permissions.** Bypass membership is not a repository
+role. A maintainer on `write` stays on `write` and can still push to `main`; being named
+in `bypass_actors` grants nothing anywhere else in the repository.
+
+**The one capability you cannot trim.** T12 showed `bypass_mode: "pull_request"` does
+not permit direct push, so every name on the list needs `"always"`, which also lets that
+person `gh pr merge --admin` a red PR. Direct push and `--admin` override cannot be
+separated. Every use of either is recorded in Rule Insights as `result: "bypass"`, so it
+is auditable after the fact.
 
 ---
 
 ## 6. Importing into spm/spm
 
-1. Settings -> Rules -> Rulesets -> New ruleset -> Import a ruleset, and upload
+1. **Edit the bypass list first.** The shipped list is a starting point, not a decision:
+   it is everyone currently holding `admin` or `maintain` on spm/spm, minus SPMcentral.
+
+   | `actor_id` | Login | Current role |
+   |---|---|---|
+   | 5950855 | `gllmflndn` | admin |
+   | 11646203 | `JohnAshburner` | admin |
+   | 1307522 | `korbinian90` | admin |
+   | 14932031 | `tierneytim` | maintain |
+   | 19425611 | `johmedr` | maintain |
+
+   Several people on `write` (`pzeidman`, `vlitvak`, `balbasty` and others) can push to
+   `main` today and would lose that. Add whoever should keep it. Look up an id with:
+
+   ```
+   gh api users/<login> --jq '.id'
+   ```
+
+   **Leave `SPMcentral` (id 5950819) off the list.** It does not need bypass, and
+   omitting it is what keeps the FieldTrip sync PR gated.
+
+2. Settings -> Rules -> Rulesets -> New ruleset -> Import a ruleset, and upload
    `main-required-checks.json`.
-2. Confirm the bypass entry resolves to **Write** in the UI. If it does not, fix the
-   `actor_id` per section 4.
-3. Decide on the Write bypass in light of section 5.
+3. Confirm the bypass entries resolve to the expected people in the UI.
 4. Save with `enforcement: "active"`. Set `"disabled"` first if you want it parked,
    but note T8: parked rulesets produce no Rule Insights.
 
