@@ -1,0 +1,348 @@
+# `main-required-checks` ruleset: verification log
+
+Everything below was tested on **korbinian90/spm** (a fork). **spm/spm was not modified.**
+
+Date: 2026-08-05. All times UTC.
+
+Companion file: [`main-required-checks.json`](main-required-checks.json), ready for
+Settings -> Rules -> Rulesets -> "New ruleset" -> "Import a ruleset".
+
+---
+
+## 1. Audit of both repositories (before any change)
+
+| | korbinian90/spm | spm/spm |
+|---|---|---|
+| `allow_auto_merge` | true | true |
+| `allow_squash_merge` | true | true |
+| `allow_merge_commit` | true | false |
+| `allow_rebase_merge` | true | true |
+| `delete_branch_on_merge` | false | true |
+| Default branch | `main` | `main` |
+| Rulesets | none | none |
+| Org/enterprise rulesets applying to `main` | none | none |
+| Plan | Free (personal) | **Team** |
+
+**Classic branch protection on `main`**
+
+- **spm/spm: no `required_status_checks`.** Only `required_linear_history: true`,
+  force-push and deletion disabled, `enforce_admins: false`. No required reviews.
+  The stop condition for this piece of work was therefore not met and the bypass
+  design is viable.
+- korbinian90/spm had `required_pull_request_reviews` with
+  `required_approving_review_count: 1`. Removed for the duration of the test so it
+  could not mask ruleset behaviour. Backed up first; contents recorded in section 7.
+
+**Live check names on a recent spm/spm PR** (#151, head `317a80e4b`):
+
+| Check | App | App id |
+|---|---|---|
+| **`Tests passed`** | `github-actions` | **15368** |
+| `CLAAssistant` | `github-actions` | 15368 |
+| `Configure test matrix (PR uses limited MATLAB versions)` | `github-actions` | 15368 |
+| `Run MATLAB Tests (latest, ubuntu-latest)` and 4 more matrix names | `github-actions` | 15368 |
+
+There are **no commit statuses** on spm/spm, only check runs.
+
+**Secrets**
+
+- `PAT_FIELDTRIP_SYNC` exists on **spm/spm only**. It is not set on the fork, which is
+  why fork PR #5 was opened by `app/github-actions` through the `GITHUB_TOKEN`
+  fallback and carries zero check runs (GITHUB_TOKEN-authored PRs do not trigger
+  workflows).
+- The account behind `PAT_FIELDTRIP_SYNC` is **SPMcentral**.
+
+**SPMcentral's standing in the spm org**
+
+- `admin` on spm/spm
+- **org owner** of `spm`
+- **maintainer** of `spm-staff`, the only team with repository access (`push`)
+
+This matters, and section 5 covers it in detail.
+
+---
+
+## 2. Test rig
+
+Because MATLAB and `spm-tests-data` are far too slow for this kind of iteration, a
+stub workflow published a check with **exactly** the name `Tests passed`, mirroring
+the `tests-passed` aggregator job in `matlab.yml` (same `needs:` plus `if: always()`
+shape). The real `Tests` workflow was already `disabled_manually` on the fork, so the
+name was never published twice.
+
+Verified identical to production:
+
+```
+Tests passed    app=github-actions/id=15368    success
+```
+
+Full stub run: 10:56:56Z to 10:57:48Z (**52 seconds**).
+
+The outcome was driven by `.github/ruleset-test-outcome`:
+
+| Value | Behaviour |
+|---|---|
+| `pass` | both stub shards succeed, `Tests passed` reports success |
+| `fail` | one shard fails, `Tests passed` reports failure |
+| `partial` | one shard hangs, so `Tests passed` never starts and the required context stays unreported |
+
+---
+
+## 3. Results
+
+Ruleset under test: target default branch, one `required_status_checks` rule with
+context `Tests passed` pinned to `integration_id: 15368`.
+
+> `enforcement: "evaluate"` was **rejected**: `Enforcement evaluate option is not
+> supported on this plan. Please upgrade to Enterprise to enable it.` The spm org is
+> on the **Team** plan, so evaluate mode is unavailable there too. Every test below
+> therefore ran in `active` mode, and `disabled` was verified as the staging
+> substitute (T8).
+
+| # | Scenario | Bypass | Expected | Result |
+|---|---|---|---|---|
+| T1 | Direct push to `main` | empty | rejected | **PASS** |
+| T2 | Direct push to `main` | Write role | accepted | **PASS** |
+| T3 | PR, `Tests passed` succeeds | empty | auto-merge fires after check | **PASS** |
+| T4 | PR, `Tests passed` fails | empty | blocked indefinitely | **PASS** |
+| T5 | PR, `Tests passed` never reported | empty | blocked indefinitely | **PASS** |
+| T6 | PR by a **bypassing** actor, check fails | Write role | see section 5 | **see 5** |
+| T7 | `--admin` override, check fails | empty | refused | **PASS** |
+| T8 | Direct push, `enforcement: disabled` | empty | accepted, not logged | **PASS** |
+| T9 | Direct push, re-verify | empty | rejected | **PASS** |
+| T10 | PR, re-verify | empty | auto-merge fires after check | **PASS** |
+
+### T1 - direct push rejected with an empty bypass list
+
+```
+remote: error: GH013: Repository rule violations found for refs/heads/main.
+remote: - Required status check "Tests passed" is expected.
+ ! [remote rejected]     HEAD -> main (push declined due to repository rule violations)
+```
+
+On creation with `bypass_actors: []` the API reported `current_user_can_bypass: "never"`
+even though the pushing account owns the repository. Rulesets have **no implicit admin
+escape hatch**, unlike classic protection's `enforce_admins`.
+
+### T2 - direct push accepted once the Write role is a bypass actor
+
+```
+remote: Bypassed rule violations for refs/heads/main:
+remote: - Required status check "Tests passed" is expected.
+   dca5486e2..4b7315869  HEAD -> main
+```
+
+`current_user_can_bypass` flipped to `"always"`. Note the pushing account holds
+**admin**, not write, and a **Write**-role bypass still covered it. Repository role
+bypass is cumulative: granting Write also grants everyone above it.
+
+### T3 - passing PR auto-merges only after the check goes green
+
+PR #6, auto-merge armed while the check was pending.
+
+```
+11:02:39  OPEN/BLOCKED
+11:02:55  OPEN/BLOCKED
+11:03:10  OPEN/BLOCKED
+11:03:26  MERGED     (mergedAt 11:03:23Z, squash)
+```
+
+Held roughly 55 seconds, then merged. It did not merge on arming.
+
+### T4 - failing PR never merges
+
+PR #7. `Tests passed` reported FAILURE at 11:05:01Z and the PR was still
+`OPEN/BLOCKED` at 11:09:10Z, over five minutes later. Auto-merge stayed armed and
+never fired.
+
+### T5 - unreported required check never merges
+
+PR #8, `partial`. One shard hung, so the aggregator never started and `Tests passed`
+**never appeared in the check list at all**:
+
+```
+11:15:24  OPEN/BLOCKED
+    Stub test (2):IN_PROGRESS | Stub test (1):SUCCESS | CLAAssistant:SUCCESS | Read desired outcome:SUCCESS
+```
+
+An **absent** required context blocks exactly like a failing one. This is the case
+most likely to occur in production, since `matlab.yml` runs a wide matrix and the
+aggregator only starts once every leg finishes.
+
+### T7 - `--admin` cannot override an empty bypass list
+
+PR #10, `Tests passed` = FAILURE:
+
+```
+$ gh pr merge 10 --squash --admin
+GraphQL: Repository rule violations found
+Required status check "Tests passed" is failing.
+```
+
+With `bypass_actors: []` the rule is absolute. Nobody can override it, including the
+repository owner.
+
+### T8 - `disabled` is a true no-op
+
+Direct push accepted silently, with no `Bypassed rule violations` banner and, notably,
+**no Rule Insights entry**. `disabled` gives you a parked ruleset but no dry-run
+telemetry, so it is a weaker staging tool than `evaluate` would have been.
+
+### T9 and T10 - re-verified in active mode
+
+After flipping back to `active` with an empty bypass, T1 and T3 were repeated. Direct
+push rejected again; PR #11 held `BLOCKED` from 11:29:26Z and merged at 11:30:33Z,
+about 67 seconds.
+
+### Rule Insights
+
+Every enforced event was recorded, and the `disabled` push correctly was not:
+
+| Rule suite | Time (UTC) | Result | Test |
+|---|---|---|---|
+| 3566524909 | 10:59:55 | `fail` | T1 |
+| 3566544539 | 11:01:45 | `bypass` | T2 |
+| 3566564340 | 11:03:23 | `pass` | T3 |
+| 3566789515 | 11:26:02 | `bypass` | T6 `--admin` |
+| 3566805924 | 11:27:49 | `fail` | T7 |
+| 3566814134 | 11:28:39 | `fail` | T9 |
+| 3566830419 | 11:30:23 | `pass` | T10 |
+
+Rule detail is available per suite, for example T1:
+
+```json
+{"rule_type": "required_status_checks", "result": "fail",
+ "details": "Required status check \"Tests passed\" is expected."}
+```
+
+---
+
+## 4. Repository role ids
+
+The role ids are **not** a contiguous 1 to 5 range. Probing each id and resolving the
+name through GraphQL (`bypassActors.repositoryRoleName`) gave:
+
+| `actor_id` | Role |
+|---|---|
+| 2 | `maintain` |
+| **4** | **`write`** |
+| 5 | `admin` |
+
+Ids 1 and 3 were silently rejected and left the ruleset unchanged. **Do not assume
+write is 3.** Confirm on spm/spm after import, since an org repo may expose `triage`
+as well.
+
+---
+
+## 5. The SPMcentral question, and what testing actually showed
+
+The concern going in was that if the `PAT_FIELDTRIP_SYNC` account is a bypass actor,
+`gh pr merge --auto --squash` would merge instantly and the tests would never gate.
+That would be a failure that looks like success.
+
+The concern is well founded in one respect: **SPMcentral cannot be excluded from any
+conventional bypass target.** It holds admin on spm/spm, owns the org, and sits in
+`spm-staff`. So `OrganizationAdmin`, `RepositoryRole: write|maintain|admin`, and the
+`spm-staff` team all contain it. `bypass_mode: "pull_request"` does not help; it grants
+bypass *on pull requests*, which is the wrong direction entirely.
+
+**But the predicted failure did not reproduce.** T6 tested it directly: a bypass actor
+(`current_user_can_bypass: "always"`) opened a fresh PR whose `Tests passed` check
+failed, and armed auto-merge before any check reported.
+
+```
+11:19:16  auto-merge armed
+11:20:21  OPEN/BLOCKED  TestsPassed=[FAILURE]
+11:24:46  OPEN/BLOCKED  TestsPassed=[FAILURE]      still blocked after 5.5 minutes
+```
+
+Three distinct merge paths were then tried on that same PR:
+
+| Path | Outcome |
+|---|---|
+| `gh pr merge --auto --squash` | **never fires**, PR stays blocked |
+| `gh pr merge --squash` | refused: `the base branch policy prohibits the merge` |
+| `gh pr merge --squash --admin` | **merges**, overriding the failing check |
+
+So the accurate model is:
+
+> `bypass_actors` governs **direct pushes** and **explicit `--admin` overrides**.
+> It does **not** loosen auto-merge. Auto-merge waits for required checks regardless
+> of who armed it.
+
+The four-second merges on spm/spm PRs #143, #145, #148 and #149 are fully explained by
+there being no required check on `main` at all. They are not evidence of bypass
+defeating a gate.
+
+**Consequence for the rollout.** The goal and the constraint are not actually in
+tension. A `RepositoryRole: write` bypass lets every maintainer keep direct-push access
+*and* leaves the FieldTrip sync PR gated, because `sync-fieldtrip.yml` calls
+`gh pr merge --auto --squash` and never passes `--admin`. That is why the shipped JSON
+carries the Write bypass.
+
+**Residual risk, stated plainly.** SPMcentral will be a bypass actor under this
+configuration. It could push directly to `main` or `--admin`-merge a red PR. It has no
+code path that does either today, and this is the same access it already holds. If you
+would rather not accept that, set `"bypass_actors": []` and maintainers lose direct
+push to `main` (verified in T1, T7). There is no configuration that keeps maintainer
+direct-push while excluding SPMcentral, short of creating a new team that omits it and
+using a `Team` bypass actor.
+
+---
+
+## 6. Importing into spm/spm
+
+1. Settings -> Rules -> Rulesets -> New ruleset -> Import a ruleset, and upload
+   `main-required-checks.json`.
+2. Confirm the bypass entry resolves to **Write** in the UI. If it does not, fix the
+   `actor_id` per section 4.
+3. Decide on the Write bypass in light of section 5.
+4. Save with `enforcement: "active"`. Set `"disabled"` first if you want it parked,
+   but note T8: parked rulesets produce no Rule Insights.
+
+Points worth knowing before you flip it on:
+
+- `strict_required_status_checks_policy` is **false**, so PRs are not forced to be up
+  to date with `main` before merging. Setting it true would make every FieldTrip sync
+  PR rebase whenever `main` moves, which on a daily sync means near-permanent churn.
+- The context is pinned to `integration_id: 15368` (GitHub Actions). A check named
+  `Tests passed` from any other app will not satisfy it.
+- **`Tests passed` must be reported on every PR, or nothing will ever merge.** T5 is
+  the proof. `matlab.yml` is currently the only `pull_request` workflow, and its
+  aggregator uses `if: always()`, so it always reports. Keep it that way.
+- The existing classic protection on `main` (`required_linear_history`, no force push,
+  no deletion) is untouched by this ruleset and both apply together.
+- Rulesets have no `enforce_admins` equivalent. With an empty bypass list the rule
+  binds the org owners too.
+
+---
+
+## 7. Fork state after testing
+
+Restored or left as follows:
+
+- Classic branch protection on korbinian90/spm `main` was **deleted** for testing. It
+  had exactly one setting worth restoring: `required_pull_request_reviews` with
+  `required_approving_review_count: 1`, `dismiss_stale_reviews: false`,
+  `require_code_owner_reviews: false`, `require_last_push_approval: false`. Everything
+  else was already off. Restore with:
+
+  ```
+  gh api -X PUT repos/korbinian90/spm/branches/main/protection --input - <<'EOF'
+  {"required_status_checks":null,"enforce_admins":false,
+   "required_pull_request_reviews":{"dismiss_stale_reviews":false,
+   "require_code_owner_reviews":false,"required_approving_review_count":1},
+   "restrictions":null}
+  EOF
+  ```
+
+- The `Tests` workflow (`matlab.yml`) was **already** `disabled_manually` on the fork
+  before this work began and was left that way.
+- The stub workflow remains on the fork so the rig stays usable. It is test
+  scaffolding and must **not** be ported to spm/spm.
+- The fork ruleset (id 20451642) was set to `enforcement: "disabled"` so the fork is
+  not left with a permanently unsatisfiable required check. Re-arm with:
+
+  ```
+  gh api -X PUT repos/korbinian90/spm/rulesets/20451642 --input - <<< '{"enforcement":"active"}'
+  ```
