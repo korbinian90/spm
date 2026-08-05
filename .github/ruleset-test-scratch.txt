@@ -1,5 +1,0 @@
-T1 direct push, empty bypass, 2026-08-05T10:59:54Z
-T3 pass 2026-08-05T11:02:16Z
-T6 hazard 2026-08-05T11:19:12Z
-T8 disabled 2026-08-05T11:28:12Z
-T9 reverify 2026-08-05T11:28:38Z
