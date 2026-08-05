@@ -1,0 +1,110 @@
+# TEST SCAFFOLDING - do not port to spm/spm.
+#
+# Publishes a check named exactly "Tests passed", mirroring the aggregator job
+# in matlab.yml, so the "main-required-checks" ruleset can be exercised without
+# running MATLAB or pulling spm-tests-data. Runs in well under a minute.
+#
+# The outcome is driven by the file .github/ruleset-test-outcome, which must
+# contain one of: pass | fail | partial
+#
+#   pass    - both stub shards succeed, "Tests passed" reports success
+#   fail    - one shard fails, "Tests passed" reports failure
+#   partial - one shard hangs, so "Tests passed" never starts and the required
+#             context stays unreported (GitHub shows it as "Expected")
+#
+# The real Tests workflow (matlab.yml) must stay disabled while this is in
+# place, otherwise the "Tests passed" name is published twice.
+name: Ruleset Test Stub
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  outcome:
+    name: Read desired outcome
+    runs-on: ubuntu-latest
+    outputs:
+      outcome: ${{ steps.read.outputs.outcome }}
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Read .github/ruleset-test-outcome
+        id: read
+        shell: bash
+        run: |
+          OUTCOME_FILE=".github/ruleset-test-outcome"
+          if [ -f "$OUTCOME_FILE" ]; then
+            OUTCOME=$(tr -d '[:space:]' < "$OUTCOME_FILE")
+          else
+            OUTCOME="pass"
+          fi
+          case "$OUTCOME" in
+            pass|fail|partial)
+              echo "Desired outcome: ${OUTCOME}"
+              ;;
+            *)
+              echo "::error::Unrecognised outcome '${OUTCOME}'. Expected pass, fail or partial."
+              exit 1
+              ;;
+          esac
+          echo "outcome=${OUTCOME}" >> "$GITHUB_OUTPUT"
+
+  # Stands in for the matlab-tests matrix in matlab.yml. Two shards is enough
+  # to produce a genuine "some done, some still running" state for `partial`.
+  stub-tests:
+    name: Stub test
+    needs: outcome
+    strategy:
+      fail-fast: false
+      matrix:
+        shard: [1, 2]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Simulate a test run
+        shell: bash
+        env:
+          OUTCOME: ${{ needs.outcome.outputs.outcome }}
+          SHARD: ${{ matrix.shard }}
+        run: |
+          if [ "$OUTCOME" = "partial" ] && [ "$SHARD" = "2" ]; then
+            echo "Shard ${SHARD}: hanging so that 'Tests passed' never starts."
+            sleep 1800
+            exit 0
+          fi
+
+          echo "Shard ${SHARD}: simulating ~30s of work."
+          sleep 30
+
+          if [ "$OUTCOME" = "fail" ] && [ "$SHARD" = "2" ]; then
+            echo "::error::Shard ${SHARD}: simulated test failure."
+            exit 1
+          fi
+
+          echo "Shard ${SHARD}: passed."
+
+  # Mirrors the tests-passed aggregator in matlab.yml, including `if: always()`
+  # and the needs-result check, so the published check behaves identically.
+  tests-passed:
+    name: Tests passed
+    needs: stub-tests
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+      - name: Fail if any stub test failed
+        if: needs.stub-tests.result != 'success'
+        shell: bash
+        run: |
+          echo "::error::One or more stub tests did not succeed (result: ${{ needs.stub-tests.result }})."
+          exit 1
+
+      - name: Report success
+        shell: bash
+        run: echo "All stub tests passed."
