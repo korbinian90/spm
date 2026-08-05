@@ -13,7 +13,7 @@
   },
   "bypass_actors": [
     {
-      "actor_id": 5950855,
+      "actor_id": 62791783,
       "actor_type": "User",
       "bypass_mode": "always"
     },
@@ -23,7 +23,32 @@
       "bypass_mode": "always"
     },
     {
+      "actor_id": 61868360,
+      "actor_type": "User",
+      "bypass_mode": "always"
+    },
+    {
       "actor_id": 1307522,
+      "actor_type": "User",
+      "bypass_mode": "always"
+    },
+    {
+      "actor_id": 2145293,
+      "actor_type": "User",
+      "bypass_mode": "always"
+    },
+    {
+      "actor_id": 19425611,
+      "actor_type": "User",
+      "bypass_mode": "always"
+    },
+    {
+      "actor_id": 60397421,
+      "actor_type": "User",
+      "bypass_mode": "always"
+    },
+    {
+      "actor_id": 14015127,
       "actor_type": "User",
       "bypass_mode": "always"
     },
@@ -33,7 +58,32 @@
       "bypass_mode": "always"
     },
     {
-      "actor_id": 19425611,
+      "actor_id": 8765418,
+      "actor_type": "User",
+      "bypass_mode": "always"
+    },
+    {
+      "actor_id": 118210848,
+      "actor_type": "User",
+      "bypass_mode": "always"
+    },
+    {
+      "actor_id": 52764815,
+      "actor_type": "User",
+      "bypass_mode": "always"
+    },
+    {
+      "actor_id": 7803834,
+      "actor_type": "User",
+      "bypass_mode": "always"
+    },
+    {
+      "actor_id": 31136567,
+      "actor_type": "User",
+      "bypass_mode": "always"
+    },
+    {
+      "actor_id": 5950855,
       "actor_type": "User",
       "bypass_mode": "always"
     }

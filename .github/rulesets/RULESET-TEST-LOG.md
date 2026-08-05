@@ -342,30 +342,54 @@ is auditable after the fact.
 
 ## 6. Importing into spm/spm
 
-1. **Edit the bypass list first.** The shipped list is a starting point, not a decision:
-   it is everyone currently holding `admin` or `maintain` on spm/spm, minus SPMcentral.
+1. **Check the bypass list.** It holds the 15 active maintainers below. Selection rule:
+   everyone who both **(a)** has `write` or better on spm/spm and **(b)** committed to
+   `main` in the 24 months to 2026-08-05. `SPMcentral` is deliberately excluded.
 
-   | `actor_id` | Login | Current role |
-   |---|---|---|
-   | 5950855 | `gllmflndn` | admin |
-   | 11646203 | `JohnAshburner` | admin |
-   | 1307522 | `korbinian90` | admin |
-   | 14932031 | `tierneytim` | maintain |
-   | 19425611 | `johmedr` | maintain |
+   | `actor_id` | Login | Commits to `main`, 24 mo | Role |
+   |---|---|---|---|
+   | 62791783 | `Friston` | 82 | write |
+   | 11646203 | `JohnAshburner` | 59 | admin |
+   | 61868360 | `barnesgr123` | 39 | write |
+   | 1307522 | `korbinian90` | 35 | admin |
+   | 2145293 | `pzeidman` | 33 | write |
+   | 19425611 | `johmedr` | 28 | maintain |
+   | 60397421 | `AlexanderNA` | 16 | write |
+   | 14015127 | `vlitvak` | 12 | write |
+   | 14932031 | `tierneytim` | 12 | maintain |
+   | 8765418 | `pranaysy` | 5 | write |
+   | 118210848 | `Y-Bezs` | 4 | write |
+   | 52764815 | `baskadym` | 2 | write |
+   | 7803834 | `balbasty` | 2 | write |
+   | 31136567 | `langestroop` | 1 | write |
+   | 5950855 | `gllmflndn` | 0 | admin |
 
-   Several people on `write` (`pzeidman`, `vlitvak`, `balbasty` and others) can push to
-   `main` today and would lose that. Add whoever should keep it. Look up an id with:
+   `gllmflndn` is included as a deliberate exception: 2025 commits all-time, the single
+   largest contributor to the repository, last commit 2023-11-22 and so outside the
+   window. The activity rule alone would have dropped him, which would plainly be wrong.
+
+   **Deliberately excluded**, each for a different reason:
+
+   | Who | Why |
+   |---|---|
+   | `SPMcentral` (5950819) | the FieldTrip sync account. Omitting it is what gates the sync PR. See section 5. |
+   | `arthurmitchell96`, `cgohil8`, `oliviakowalczyk` | hold `write` but no commits to `main` in 24 months. **They can push today and would lose it.** Add them if that is wrong. |
+   | `VolkmarGlauche`, `ChristophePhillips`, `tejparr`, `RCTimms`, `NicoleLabrAvila`, `stephaniemellor`, `suvadeepmaiti` | `triage` only, so they cannot push to `main` regardless. A bypass entry would do nothing. |
+   | `georgeoneill`, `WillForan`, `Remi-Gau`, `RaniaImanV` | `read` or not collaborators. Their commits arrived through PRs. |
+
+   To add someone:
 
    ```
    gh api users/<login> --jq '.id'
    ```
 
-   **Leave `SPMcentral` (id 5950819) off the list.** It does not need bypass, and
-   omitting it is what keeps the FieldTrip sync PR gated.
+   then append `{"actor_id": <id>, "actor_type": "User", "bypass_mode": "always"}`.
+   `"always"` is required; `"pull_request"` does not permit direct push (T12).
 
 2. Settings -> Rules -> Rulesets -> New ruleset -> Import a ruleset, and upload
    `main-required-checks.json`.
-3. Confirm the bypass entries resolve to the expected people in the UI.
+3. Confirm the bypass entries resolve to the expected people in the UI, and that
+   **SPMcentral is not among them**.
 4. Save with `enforcement: "active"`. Set `"disabled"` first if you want it parked,
    but note T8: parked rulesets produce no Rule Insights.
 
