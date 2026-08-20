@@ -115,6 +115,8 @@ context `Tests passed` pinned to `integration_id: 15368`.
 | T12 | Direct push | named User, `bypass_mode: "pull_request"` | rejected | **PASS** |
 | T13 | `git push --dry-run` against a blocked ref | empty | reports the violation | **it does not** |
 | T14 | Push by the **Actions bot** (GITHUB_TOKEN) | empty | see section 7 | **rejected** |
+| T15 | Contents API write to a blocked ref | empty | rejected like a push | **PASS** |
+| T16 | `cla-signatures` protection: append / force push / delete | empty | allow / reject / reject | **PASS** |
 
 ### T1 - direct push rejected with an empty bypass list
 
@@ -241,6 +243,21 @@ exactly across T1, T2, T9, T11 and T12.
 ### T14 - the Actions bot is blocked, which breaks the CLA Assistant
 
 See section 7.
+
+### T16 - protecting the signature branch without blocking the bot
+
+Second ruleset, `cla-signatures-protection`: rules `deletion` and `non_fast_forward`,
+empty bypass, scoped to `refs/heads/cla-signatures`. Verified on a throwaway branch:
+
+| Operation | Result |
+|---|---|
+| normal append push (what the CLA bot does) | **accepted** |
+| `git push --force` | rejected, `push declined due to repository rule violations` |
+| `git push --delete` | rejected, same |
+
+`non_fast_forward` only blocks history rewrites, so the bot's ordinary appends are
+unaffected. This is what gives the signature record the same force-push and deletion
+protection that `main` has through its classic protection.
 
 ### T9 and T10 - re-verified in active mode
 
