@@ -215,6 +215,20 @@ elseif Ndata>1
   ft_error('multiple data inputs into a topoplot function should be of the same datatype');
 elseif Ndata==1
   dtype =dtype{1};
+
+  % quickly check whether the parameter field is specified by the user, and
+  % if it's a cell-array, recurse into the function
+  param = ft_getopt(cfg, 'parameter');
+  if iscell(param)
+    for i=1:numel(param)
+      tmpdata{i} = keepfields(varargin{1}, {'label' 'time' 'freq' 'dimord'});
+      tmpdata{i}.data = varargin{1}.(param{i});
+      cfg.dataname{i} = param{i};
+    end
+    cfg.parameter = 'data';
+    topoplot_common(cfg, tmpdata{:});
+    return;
+  end
 end
 
 if strcmp(dtype, 'comp')
@@ -1016,6 +1030,9 @@ if ~isempty(ident) && isfield(info.(ident), 'commenth') && ~isempty(info.(ident)
   end
 end
 
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+% SUBFUNCTION to select components
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 function data = select_component(data, indx)
 
 % Add a pseudo-axis with the component numbers
@@ -1023,7 +1040,8 @@ data.comp = 1:size(data.topo,2);
 
 % make a selection of components
 data.comp  = data.comp(indx);
+data.compdimord = 'comp';
 data.topo  = data.topo(:,indx);
-data.label = data.topolabel;
 data.topodimord = 'chan_comp';
+data.label = data.topolabel;
 data = removefields(data, {'topolabel', 'unmixing', 'unmixingdimord'}); % not needed any more

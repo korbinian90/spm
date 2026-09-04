@@ -157,7 +157,7 @@ nchan = length(sens.label);
 % these are used at multiple places, therefore we determine them only once
 if isfield(sens, 'coilpos')
   ismeg = true;
-  iseeg = true;
+  iseeg = false;
   isnirs = false;
 elseif isfield(sens, 'elecpos')
   ismeg = false;
@@ -514,6 +514,11 @@ switch version
       else
         % for EEG it is not required
       end
+    end
+
+    if isfield(sens, 'chantype')
+        % Make sure everything is in lower case
+        sens.chantype = lower(sens.chantype);
     end
     
     if ~isfield(sens, 'unit')
